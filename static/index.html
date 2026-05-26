@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessMate &mdash; PESSI vs RONALDO</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body data-theme="dark">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <span class="brand-mark" aria-hidden="true">&#9818;</span>
+          <div class="brand-text">
+            <p class="eyebrow">ChessMate</p>
+            <h1>PESSI <span class="vs">vs</span> RONALDO</h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <button id="mode-button" type="button" class="ghost" title="Schimba modul de joc">
+            <span class="btn-icon" aria-hidden="true">&#9881;</span>
+            <span class="btn-label" id="mode-button-label">1v1 Local</span>
+          </button>
+          <button id="undo-button" type="button" class="ghost" title="Anuleaza ultima mutare" disabled>
+            <span class="btn-icon" aria-hidden="true">&#8634;</span>
+            <span class="btn-label">Undo</span>
+          </button>
+          <button id="flip-button" type="button" class="ghost" title="Roteste tabla">
+            <span class="btn-icon" aria-hidden="true">&#8645;</span>
+            <span class="btn-label">Flip</span>
+          </button>
+          <button id="reset-button" type="button" class="primary" title="Joc nou">
+            <span class="btn-icon" aria-hidden="true">&#8635;</span>
+            <span class="btn-label">Joc nou</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="play-area" aria-label="Tabla de sah">
+          <div class="player-card" id="player-top">
+            <div class="player-info">
+              <span class="player-dot black"></span>
+              <span class="player-name" data-side="black">RONALDO</span>
+              <span class="player-color">Negre</span>
+            </div>
+            <div class="captured-row" id="captured-by-white" aria-label="Piese capturate de albe"></div>
+          </div>
+
+          <div id="board" class="board" aria-label="Tabla 8x8">
+            <div class="squares-layer" id="squares-layer"></div>
+            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
+            <div class="coords-files" id="coords-files"></div>
+            <div class="coords-ranks" id="coords-ranks"></div>
+            <div class="bot-thinking" id="bot-thinking" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="bot-thinking-text">Bot gandeste...</span>
+            </div>
+          </div>
+
+          <div class="player-card" id="player-bottom">
+            <div class="player-info">
+              <span class="player-dot white"></span>
+              <span class="player-name" data-side="white">PESSI</span>
+              <span class="player-color">Albe</span>
+            </div>
+            <div class="captured-row" id="captured-by-black" aria-label="Piese capturate de negre"></div>
+          </div>
+
+          <div class="status-bar" id="status-bar" role="status" aria-live="polite">
+            <span class="turn-pill" id="turn-pill">
+              <span class="turn-dot"></span>
+              <span id="turn-text">Tura: Albe</span>
+            </span>
+            <span id="message" class="message"></span>
+          </div>
+        </section>
+
+        <aside class="side-panel" aria-label="Istoric mutari">
+          <div class="panel-header">
+            <h2>Istoric mutari</h2>
+            <span class="badge" id="move-count">0</span>
+          </div>
+          <ol class="moves-list" id="moves-list"></ol>
+          <div class="panel-empty" id="moves-empty">
+            Inca nu s-a jucat nicio mutare.<br>
+            <span class="hint">Clic pe o piesa alba pentru a incepe.</span>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- Mode-select modal -->
+    <div class="modal-backdrop" id="mode-modal" hidden>
+      <div class="modal mode-modal" role="dialog" aria-modal="true" aria-labelledby="mode-title">
+        <h3 id="mode-title">Alege modul de joc</h3>
+        <p class="modal-text">Ambele moduri sunt locale, fara conexiune la internet.</p>
+
+        <div class="mode-choices" id="mode-choices">
+          <button type="button" class="mode-tile selected" data-mode="local">
+            <div class="mode-icon" aria-hidden="true">&#128101;</div>
+            <div class="mode-name">1v1 Local</div>
+            <div class="mode-desc">Doi jucatori, acelasi calculator.</div>
+          </button>
+          <button type="button" class="mode-tile" data-mode="vs_bot">
+            <div class="mode-icon" aria-hidden="true">&#129302;</div>
+            <div class="mode-name">Contra bot</div>
+            <div class="mode-desc">Joaca impotriva motorului.</div>
+          </button>
+        </div>
+
+        <div class="mode-options" id="mode-options" hidden>
+          <div class="mode-options-row">
+            <h4>Joaca cu</h4>
+            <div class="pill-choices" id="color-choices">
+              <button type="button" class="pill selected" data-color="white">Albe</button>
+              <button type="button" class="pill" data-color="black">Negre</button>
+              <button type="button" class="pill" data-color="random">Aleator</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="mode-cancel">Inapoi</button>
+          <button type="button" class="primary" id="mode-start">Start</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promotion modal -->
+    <div class="modal-backdrop" id="promo-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+        <h3 id="promo-title">Promovare pion</h3>
+        <p class="modal-text">Alege piesa pe care o vrei in locul pionului.</p>
+        <div class="promo-choices" id="promo-choices"></div>
+      </div>
+    </div>
+
+    <!-- Game over modal -->
+    <div class="modal-backdrop" id="endgame-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="endgame-title">
+        <div class="endgame-icon" id="endgame-icon" aria-hidden="true">&#9812;</div>
+        <h3 id="endgame-title">Sah-mat!</h3>
+        <p class="modal-text" id="endgame-text">Albele castiga.</p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="endgame-close">Vezi tabla</button>
+          <button type="button" class="primary" id="endgame-reset">Joc nou</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
