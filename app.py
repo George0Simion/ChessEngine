@@ -101,9 +101,30 @@ def create_app() -> Flask:
     def index():
         return send_from_directory(app.static_folder, "index.html")
 
+    # ------ Unified play pages (all served by the same polished board) ------
+    @app.get("/play")
+    @app.get("/play/bot")
+    @app.get("/play/local")
+    @app.get("/play/online")
+    @app.get("/puzzles")
+    def play_page():
+        return send_from_directory(app.static_folder, "play.html")
+
+    # Login is just the home page (the home knows how to open the modal).
+    @app.get("/login")
+    def login_alias():
+        return send_from_directory(app.static_folder, "index.html")
+
+    # Dedicated profile page.
+    @app.get("/profile")
+    def profile_page():
+        return send_from_directory(app.static_folder, "profile.html")
+
+    # Backwards compat: the old /bot path used to serve a separate page.
     @app.get("/bot")
-    def bot_game():
-        return send_from_directory(app.static_folder, "bot-game.html")
+    def bot_redirect():
+        from flask import redirect
+        return redirect("/play/bot", code=301)
 
     # ------------------------------------------------------------------
     # State / moves
@@ -278,7 +299,19 @@ def create_app() -> Flask:
                     "ok": False,
                     "error": "botColor trebuie sa fie 'white' sau 'black'.",
                 }), 400
-            session.engine = build_engine("mcts")
+            # Optional difficulty dial (1..4); affects only MCTS budget.
+            level_raw = payload.get("level", 3)
+            try:
+                level = max(1, min(4, int(level_raw)))
+            except (TypeError, ValueError):
+                level = 3
+            level_to_mcts = {
+                1: {"simulations":  20, "time_budget": 0.2},
+                2: {"simulations":  80, "time_budget": 0.6},
+                3: {"simulations": 200, "time_budget": 1.5},
+                4: {"simulations": 600, "time_budget": 4.0},
+            }
+            session.engine = build_engine("mcts", **level_to_mcts[level])
         elif mode == MODE_MULTIPLAYER:
             session.engine = None
             bot_color = None
@@ -427,6 +460,14 @@ def _state_with_session(session: GameSession) -> dict:
     payload = session.game.state()
     payload["session"] = session.mode_info()
     return payload
+
+
+def _puzzle_unavailable_msg() -> str:
+    return (
+        "Baza de date de puzzle-uri nu este disponibilă. "
+        "Descarcă fișierul CSV de pe Kaggle și setează "
+        "variabila de mediu PUZZLE_CSV_PATH cu calea către el."
+    )
 
 
 def _ensure_games_schema() -> None:

@@ -40,7 +40,7 @@ let mpPendingMoves = null;
 let mpQueueSince = null;
 let mpQueueTimer = null;
 // Mode-select draft state (mirrors UI selection inside the modal)
-let modeDraft = { mode: "local", color: "white", minutes: 3 };
+let modeDraft = { mode: "local", color: "white", minutes: 3, level: 3 };
 
 // ----- DOM -----
 const boardEl = document.querySelector("#board");
@@ -356,8 +356,8 @@ function resolvePlayerNames(state) {
 }
 
 function renderStatus(state) {
-  const colorRo = state.turn === "white" ? "Albe" : "Negre";
-  turnText.textContent = state.status === "active" ? `Tura: ${colorRo}` : labelForStatus(state);
+  const colorEn = state.turn === "white" ? "White" : "Black";
+  turnText.textContent = state.status === "active" ? `${colorEn} to move` : labelForStatus(state);
   turnPill.dataset.turn = state.turn;
   const whiteCard = isFlipped ? playerTopCard : playerBottomCard;
   const blackCard = isFlipped ? playerBottomCard : playerTopCard;
@@ -374,11 +374,11 @@ function renderStatus(state) {
   const botColorEl = playerBottomCard.querySelector(".player-color");
   const botDot   = playerBottomCard.querySelector(".player-dot");
   if (isFlipped) {
-    topName.textContent = whiteName;  topColor.textContent = "Albe";  topDot.className = "player-dot white";
-    botName.textContent = blackName;  botColorEl.textContent = "Negre"; botDot.className = "player-dot black";
+    topName.textContent = whiteName;  topColor.textContent = "White";  topDot.className = "player-dot white";
+    botName.textContent = blackName;  botColorEl.textContent = "Black"; botDot.className = "player-dot black";
   } else {
-    topName.textContent = blackName;  topColor.textContent = "Negre"; topDot.className = "player-dot black";
-    botName.textContent = whiteName;  botColorEl.textContent = "Albe";  botDot.className = "player-dot white";
+    topName.textContent = blackName;  topColor.textContent = "Black"; topDot.className = "player-dot black";
+    botName.textContent = whiteName;  botColorEl.textContent = "White";  botDot.className = "player-dot white";
   }
   if (titleWhiteEl) titleWhiteEl.textContent = whiteName;
   if (titleBlackEl) titleBlackEl.textContent = blackName;
@@ -387,17 +387,17 @@ function renderStatus(state) {
 
 function labelForStatus(state) {
   if (state.status === "checkmate") {
-    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
-    return `Sah-mat — ${winner} castiga`;
+    const winner = state.winner === "white" ? "White" : "Black";
+    return `Checkmate — ${winner} wins`;
   }
-  if (state.status === "stalemate") return "Pat — remiza";
-  if (state.status === "draw_insufficient") return "Remiza — material insuficient";
-  if (state.status === "draw_fifty_move") return "Remiza — regula celor 50 de mutari";
-  if (state.status === "draw_repetition") return "Remiza — repetitie triplа";
-  if (state.status === "timeout") return "Timp expirat";
-  if (state.status === "resign") return "Resemnare";
-  if (state.status === "abandoned") return "Abandon";
-  return `Tura: ${state.turn === "white" ? "Albe" : "Negre"}`;
+  if (state.status === "stalemate")          return "Stalemate — draw";
+  if (state.status === "draw_insufficient")  return "Draw — insufficient material";
+  if (state.status === "draw_fifty_move")    return "Draw — 50-move rule";
+  if (state.status === "draw_repetition")    return "Draw — threefold repetition";
+  if (state.status === "timeout")            return "Time out";
+  if (state.status === "resign")             return "Resignation";
+  if (state.status === "abandoned")          return "Game abandoned";
+  return state.turn === "white" ? "White to move" : "Black to move";
 }
 
 function renderMoves(state) {
@@ -509,45 +509,45 @@ function renderEndgame(state) {
   if (endgameSeen) return;
   endgameSeen = true;
   if (state.status === "checkmate") {
-    endgameTitle.textContent = "Sah-mat!";
+    endgameTitle.textContent = "Checkmate";
     endgameIcon.textContent = "\u265A";
-    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
-    endgameText.textContent = `${winner} castiga partida.`;
+    const winner = state.winner === "white" ? "White" : "Black";
+    endgameText.textContent = `${winner} wins.`;
   } else if (state.status === "stalemate") {
-    endgameTitle.textContent = "Pat";
+    endgameTitle.textContent = "Stalemate";
     endgameIcon.textContent = "\u00BD";
-    endgameText.textContent = "Partida se termina la egalitate.";
+    endgameText.textContent = "Draw.";
   } else if (state.status === "draw_insufficient") {
-    endgameTitle.textContent = "Remiza";
+    endgameTitle.textContent = "Draw";
     endgameIcon.textContent = "\u00BD";
-    endgameText.textContent = "Material insuficient — nimeni nu poate da mat.";
+    endgameText.textContent = "Insufficient material.";
   } else if (state.status === "draw_fifty_move") {
-    endgameTitle.textContent = "Remiza";
+    endgameTitle.textContent = "Draw";
     endgameIcon.textContent = "\u00BD";
-    endgameText.textContent = "50 de mutari fara captura sau pion mutat.";
+    endgameText.textContent = "50-move rule.";
   } else if (state.status === "draw_repetition") {
-    endgameTitle.textContent = "Remiza";
+    endgameTitle.textContent = "Draw";
     endgameIcon.textContent = "\u00BD";
-    endgameText.textContent = "Aceeasi pozitie a aparut de trei ori.";
+    endgameText.textContent = "Threefold repetition.";
   } else if (state.status === "timeout") {
-    endgameTitle.textContent = "Timp expirat";
+    endgameTitle.textContent = "Time out";
     endgameIcon.textContent = "\u23F1";
-    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
-    endgameText.textContent = `${winner} castiga la timp.`;
+    const winner = state.winner === "white" ? "White" : "Black";
+    endgameText.textContent = `${winner} wins on time.`;
   } else if (state.status === "resign") {
-    endgameTitle.textContent = "Resemnare";
+    endgameTitle.textContent = "Resignation";
     endgameIcon.textContent = "\u2691";
-    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
-    endgameText.textContent = `${winner} castiga prin abandon.`;
+    const winner = state.winner === "white" ? "White" : "Black";
+    endgameText.textContent = `${winner} wins by resignation.`;
   } else if (state.status === "abandoned") {
-    endgameTitle.textContent = "Abandon";
+    endgameTitle.textContent = "Game abandoned";
     endgameIcon.textContent = "\u2691";
-    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
-    endgameText.textContent = `${winner} castiga dupa deconectare.`;
+    const winner = state.winner === "white" ? "White" : "Black";
+    endgameText.textContent = `${winner} wins (opponent left).`;
   } else {
-    endgameTitle.textContent = "Final";
+    endgameTitle.textContent = "Game over";
     endgameIcon.textContent = "\u00BD";
-    endgameText.textContent = "Partida s-a terminat.";
+    endgameText.textContent = "";
   }
   endgameModal.hidden = false;
 }
@@ -562,7 +562,7 @@ function renderModeButton(state) {
     const base = (mpInfo && mpInfo.timeControl && mpInfo.timeControl.baseMin) || modeDraft.minutes || 3;
     modeButtonLabel.textContent = `Online ${base}+2`;
   } else if (session.mode === "vs_bot") {
-    const human = session.botColor === "white" ? "Negre" : "Albe";
+    const human = session.botColor === "white" ? "Black" : "White";
     modeButtonLabel.textContent = `vs Bot (${human})`;
   } else if (session.mode === "puzzle") {
     modeButtonLabel.textContent = "Puzzle";
@@ -577,12 +577,12 @@ function renderPuzzleInfo(state) {
   if (!inPuzzle) return;
 
   const puzzle = state.puzzle || {};
-  const colorLabel = puzzle.solverColor === "white" ? "Albe" : "Negre";
+  const colorLabel = puzzle.solverColor === "white" ? "White" : "Black";
 
   puzzleRatingEl.textContent = `★ ${puzzle.rating || "?"}`;
   puzzleProgressEl.textContent = puzzle.isComplete
-    ? "Rezolvat!"
-    : `${puzzle.completedSteps}/${puzzle.totalSteps} mutări (${colorLabel})`;
+    ? "Solved!"
+    : `${puzzle.completedSteps}/${puzzle.totalSteps} moves (${colorLabel})`;
 
   puzzleThemesEl.innerHTML = "";
   for (const theme of (puzzle.themes || []).slice(0, 5)) {
@@ -604,7 +604,7 @@ function showPuzzleSolvedModal(state) {
   const puzzle = state && state.puzzle;
   puzzleSolvedText.textContent = puzzle && puzzle.rating
     ? `Felicitări! Ai rezolvat un puzzle de rating ${puzzle.rating}.`
-    : "Felicitări! Ai găsit toate mutările corecte.";
+    : "Nice work - you found every correct move.";
   puzzleSolvedModal.hidden = false;
 }
 
@@ -888,7 +888,7 @@ async function submitMove(origin, target, promotion) {
       legalMoves = [];
       setMessage("");
     } catch (err) {
-      setMessage(err.message || "Mutarea a fost respinsa.");
+      setMessage(err.message || "Move was rejected.");
     } finally {
       setTimeout(() => { interactionLocked = false; }, 200);
     }
@@ -913,12 +913,12 @@ async function submitMove(origin, target, promotion) {
       legalMoves = [];
       if (!data.ok || data.correct === false) {
         triggerBoardFlash("wrong");
-        showPuzzleFeedback("Mutare greșită — mai încearcă!", "wrong");
+        showPuzzleFeedback("Wrong move - try again!", "wrong");
         if (data.state) applyState(data.state);
         return;
       }
       setMessage("");
-      showPuzzleFeedback("Mutare bună!", "good");
+      showPuzzleFeedback("Good move!", "good");
       applyState(data.state);
       if (data.complete) {
         showPuzzleSolvedModal(data.state);
@@ -926,7 +926,7 @@ async function submitMove(origin, target, promotion) {
       return;
     }
 
-    if (!response.ok || !data.ok) throw new Error(data.error || "Mutarea a fost respinsa.");
+    if (!response.ok || !data.ok) throw new Error(data.error || "Move was rejected.");
     selectedSquare = null;
     legalMoves = [];
     setMessage("");
@@ -973,7 +973,7 @@ async function performReset() {
     return;
   }
 
-  // In puzzle mode, "Joc nou" loads a new random puzzle in the same theme
+  // In puzzle mode, "New game" loads a new random puzzle in the same theme
   if (lastState && isPuzzleMode(lastState)) {
     const theme = lastState?.puzzle?.themes?.[0] || null;
     await loadPuzzle(theme);
@@ -1079,6 +1079,20 @@ function syncModeUI() {
   for (const pill of colorChoicesWrap.querySelectorAll(".pill")) {
     pill.classList.toggle("selected", pill.dataset.color === modeDraft.color);
   }
+  // Bot level row + pills (only meaningful for vs_bot mode).
+  const levelRow = document.querySelector("#level-row");
+  const levelChoices = document.querySelector("#level-choices");
+  if (levelRow) {
+    levelRow.hidden = modeDraft.mode !== "vs_bot";
+  }
+  if (levelChoices) {
+    for (const pill of levelChoices.querySelectorAll(".pill")) {
+      pill.classList.toggle(
+        "selected",
+        Number(pill.dataset.level) === Number(modeDraft.level || 3)
+      );
+    }
+  }
   if (timeChoicesWrap) {
     for (const pill of timeChoicesWrap.querySelectorAll(".pill")) {
       pill.classList.toggle(
@@ -1114,6 +1128,7 @@ async function startSelectedMode() {
       humanColor = Math.random() < 0.5 ? "white" : "black";
     }
     body.botColor = humanColor === "white" ? "black" : "white";
+    body.level = Number(modeDraft.level || 3);
     // If user is playing black, auto-flip so their pieces are on the bottom.
     if (humanColor === "black" && !isFlipped) {
       isFlipped = true;
@@ -1173,6 +1188,15 @@ if (timeChoicesWrap) {
     const pill = event.target.closest(".pill");
     if (!pill) return;
     modeDraft.minutes = Number(pill.dataset.minutes) || 3;
+    syncModeUI();
+  });
+}
+const levelChoicesWrap = document.querySelector("#level-choices");
+if (levelChoicesWrap) {
+  levelChoicesWrap.addEventListener("click", (event) => {
+    const pill = event.target.closest(".pill");
+    if (!pill) return;
+    modeDraft.level = Number(pill.dataset.level) || 3;
     syncModeUI();
   });
 }
@@ -1260,13 +1284,13 @@ function startQueueTimer() {
   if (!mpOverlayWait) return;
   stopQueueTimer();
   mpQueueSince = Date.now();
-  mpOverlayWait.textContent = "Timp in asteptare: 0:00";
+  mpOverlayWait.textContent = "Wait time: 0:00";
   mpQueueTimer = setInterval(() => {
     if (!mpQueueSince) return;
     const elapsed = Math.max(0, Math.floor((Date.now() - mpQueueSince) / 1000));
     const minutes = Math.floor(elapsed / 60);
     const seconds = String(elapsed % 60).padStart(2, "0");
-    mpOverlayWait.textContent = `Timp in asteptare: ${minutes}:${seconds}`;
+    mpOverlayWait.textContent = `Wait time: ${minutes}:${seconds}`;
   }, 1000);
 }
 
@@ -1322,7 +1346,7 @@ async function startMultiplayer(minutes) {
     return;
   }
 
-  showMultiplayerOverlay(true, "Cautam adversar...");
+  showMultiplayerOverlay(true, "Looking for an opponent...");
   mpSocket.send(JSON.stringify({ type: "join_queue", minutes }));
 }
 
@@ -1371,7 +1395,7 @@ function handleMultiplayerMessage(event) {
       return;
     case "queued":
       mpStatus = "queue";
-      showMultiplayerOverlay(true, "Cautam adversar...");
+      showMultiplayerOverlay(true, "Looking for an opponent...");
       startQueueTimer();
       return;
     case "queue_canceled":
@@ -1564,10 +1588,7 @@ async function performLogin(e) {
     authToken = data.token;
     localStorage.setItem(TOKEN_KEY, authToken);
     currentUser = { username: data.username };
-    hideAuthModal();
-    updateUserChip();
-    await loadInitialState();
-    await loadMultiplayerConfig();
+    await performLoginAndContinue();
   } catch (err) {
     authErrorEl.textContent = err.message;
   } finally {
@@ -1593,7 +1614,7 @@ async function performRegister(e) {
       body: JSON.stringify({ username, password }),
     });
     const regData = await regRes.json();
-    if (!regData.ok) throw new Error(regData.error || 'Înregistrare eșuată.');
+    if (!regData.ok) throw new Error(regData.error || 'Registration failed.');
     // Auto-login after register
     const loginRes  = await fetch('/auth/login', {
       method: 'POST',
@@ -1601,14 +1622,11 @@ async function performRegister(e) {
       body: JSON.stringify({ username, password }),
     });
     const loginData = await loginRes.json();
-    if (!loginData.ok) throw new Error('Cont creat! Conectează-te manual.');
+    if (!loginData.ok) throw new Error('Account created. Please log in.');
     authToken = loginData.token;
     localStorage.setItem(TOKEN_KEY, authToken);
     currentUser = { username: loginData.username };
-    hideAuthModal();
-    updateUserChip();
-    await loadInitialState();
-    await loadMultiplayerConfig();
+    await performLoginAndContinue();
   } catch (err) {
     authErrorEl.textContent = err.message;
   } finally {
@@ -1631,14 +1649,27 @@ function performLogout() {
   regUserEl.value = '';
   regPassEl.value = '';
   switchAuthTab('login');
-  showAuthModal();
+  // If we are on a protected mode, go home; otherwise stay (guests can keep playing).
+  const mode = currentUrlMode();
+  if (mode === 'multiplayer' || mode === 'puzzle') {
+    location.href = '/';
+  }
 }
 
-async function checkAuthAndLoad() {
-  if (!authToken) {
-    showAuthModal();
-    return;
-  }
+// Modal-close, login-shortcut and back-home flow are wired further down
+// in the "Routing / boot" section.
+
+async function performLoginAndContinue() {
+  // After login, retry the requested mode from the URL.
+  hideAuthModal();
+  updateUserChip();
+  await loadInitialState({ skipAutoStart: true });
+  await loadMultiplayerConfig();
+  await applyUrlModeAfterAuth();
+}
+
+async function checkAuthSilently() {
+  if (!authToken) return false;
   try {
     const res  = await fetch('/auth/me', {
       headers: { 'Authorization': `Bearer ${authToken}` },
@@ -1646,14 +1677,14 @@ async function checkAuthAndLoad() {
     const data = await res.json();
     if (!data.ok) throw new Error('Token invalid');
     currentUser = { username: data.user.username, rating: data.user.rating };
-    hideAuthModal();
     updateUserChip();
-    await loadInitialState();
-    await loadMultiplayerConfig();
+    return true;
   } catch {
     authToken = null;
     localStorage.removeItem(TOKEN_KEY);
-    showAuthModal();
+    currentUser = null;
+    updateUserChip();
+    return false;
   }
 }
 
@@ -1666,9 +1697,9 @@ logoutBtn.addEventListener('click', performLogout);
 
 // ----- Initial load -----
 
-async function loadInitialState() {
+async function loadInitialState({ skipAutoStart = false } = {}) {
   buildBoardScaffold();
-  await loadLocalState({ openMode: true, allowCancel: false });
+  await loadLocalState({ openMode: !skipAutoStart, allowCancel: true });
 }
 
 async function loadLocalState({ openMode = false, allowCancel = true } = {}) {
@@ -1680,7 +1711,7 @@ async function loadLocalState({ openMode = false, allowCancel = true } = {}) {
       openModeModal({ allowCancel });
     }
   } catch (err) {
-    setMessage("Nu pot incarca starea: " + err.message);
+    setMessage("Cannot load state: " + err.message);
   }
 }
 
@@ -1700,14 +1731,14 @@ async function showPuzzleHint() {
   try {
     const res = await fetch("/api/puzzle/hint");
     const data = await res.json();
-    if (!data.ok) { setMessage(data.error || "Nu există indiciu.", "error"); return; }
+    if (!data.ok) { setMessage(data.error || "No hint available.", "error"); return; }
 
     // Highlight the hint squares on the board
     clearTimeout(_hintClearTimer);
     selectedSquare = data.from;
     legalMoves = [data.to];
     if (lastState) renderHighlights(lastState);
-    showPuzzleFeedback(`Mută din ${data.from} în ${data.to}`, "hint");
+    showPuzzleFeedback(`Move from ${data.from} to ${data.to}`, "hint");
 
     _hintClearTimer = setTimeout(() => {
       selectedSquare = null;
@@ -1715,7 +1746,7 @@ async function showPuzzleHint() {
       if (lastState) renderHighlights(lastState);
     }, 4000);
   } catch (err) {
-    setMessage("Ajutor: " + err.message);
+    setMessage("Hint: " + err.message);
   }
 }
 
@@ -1747,4 +1778,294 @@ puzzleSolvedNext.addEventListener("click", () => {
   loadPuzzle(theme);
 });
 
-checkAuthAndLoad();
+// ============================================================
+// Routing / boot
+// Read the mode from the URL path and start the matching flow.
+//   /play/bot      -> bot setup (guest OK)
+//   /play/local    -> 1v1 same computer (guest OK)
+//   /play/online   -> matchmaking (requires login)
+//   /puzzles       -> puzzle (requires login)
+//   /              -> we are on the home page, not here
+// Anything else just opens the mode picker.
+// ============================================================
+function currentUrlMode() {
+  const path = (location.pathname || '').replace(/\/$/, '');
+  if (path === '/play/bot')    return 'vs_bot';
+  if (path === '/play/local')  return 'local';
+  if (path === '/play/online') return 'multiplayer';
+  if (path === '/puzzles')     return 'puzzle';
+  // Backwards compat for the older /bot path
+  if (path === '/bot') return 'vs_bot';
+  // Query fallback
+  const q = new URLSearchParams(location.search).get('mode');
+  if (q === 'bot')        return 'vs_bot';
+  if (q === 'local')      return 'local';
+  if (q === 'online')     return 'multiplayer';
+  if (q === 'puzzle')     return 'puzzle';
+  return null;
+}
+
+function modeRequiresAuth(mode) {
+  return mode === 'multiplayer' || mode === 'puzzle';
+}
+
+function presetSetupDraftFromUrl() {
+  const mode = currentUrlMode();
+  if (!mode) return false;
+  modeDraft.mode = mode;
+  const params = new URLSearchParams(location.search);
+  const color = params.get('color');
+  if (color && ['white', 'black', 'random'].includes(color)) {
+    modeDraft.color = color;
+  }
+  const level = params.get('level');
+  if (level && ['1', '2', '3', '4'].includes(level)) {
+    modeDraft.level = Number(level);
+  }
+  const minutes = params.get('minutes');
+  if (minutes && ['3', '5', '10'].includes(minutes)) {
+    modeDraft.minutes = Number(minutes);
+  }
+  return true;
+}
+
+async function applyUrlModeAfterAuth() {
+  // Called after a successful login from the protected-mode flow.
+  if (presetSetupDraftFromUrl()) {
+    await startSelectedMode();
+  }
+}
+
+// Login shortcut (in topbar, shown when guest)
+const loginShortcutBtn = document.querySelector('#login-shortcut');
+if (loginShortcutBtn) {
+  loginShortcutBtn.addEventListener('click', () => {
+    switchAuthTab('login');
+    showAuthModal();
+  });
+}
+
+// Auth-modal close button (only enabled when login isn't strictly required).
+const authModalCloseBtn = document.querySelector('#auth-modal-close');
+if (authModalCloseBtn) {
+  authModalCloseBtn.addEventListener('click', () => {
+    hideAuthModal();
+    // If the user dismissed a forced login on a protected mode, go home.
+    if (modeRequiresAuth(currentUrlMode())) location.href = '/';
+  });
+}
+
+// Reveal/hide the topbar auth buttons based on currentUser.
+const profileLinkEl = document.querySelector('#profile-link');
+function refreshTopbarAuthButtons() {
+  const isAuthed = !!currentUser;
+  if (loginShortcutBtn) loginShortcutBtn.hidden = isAuthed;
+  if (profileLinkEl)    profileLinkEl.hidden    = !isAuthed;
+  if (logoutBtn)        logoutBtn.hidden        = !isAuthed;
+}
+const _origUpdateUserChip = updateUserChip;
+updateUserChip = function patchedUpdateUserChip() {
+  _origUpdateUserChip();
+  refreshTopbarAuthButtons();
+};
+
+// ============================================================
+// Side panel: bot/online "game info" card replaces the puzzle card
+// in non-puzzle modes. Driven from applyState via patched render.
+// ============================================================
+const gameInfoCard    = document.querySelector('#game-info-card');
+const gameInfoBot     = document.querySelector('#info-bot-level');
+const gameInfoCol     = document.querySelector('#info-your-color');
+const gameInfoLast    = document.querySelector('#info-last-bot');
+const gameInfoLastRow = document.querySelector('#info-row-last');
+const gameInfoBotRow  = document.querySelector('#info-row-bot');
+const gameInfoStatus  = document.querySelector('#info-status');
+
+const LEVEL_NAMES = ['', 'Beginner', 'Medium', 'Advanced', 'Expert'];
+
+function renderGameInfoCard(state) {
+  if (!gameInfoCard) return;
+  const sess = state && state.session;
+  const mode = sess && sess.mode;
+  // Hide the bot/info card in puzzle mode (puzzle has its own card) or when
+  // there is no session yet.
+  if (!sess || mode === 'puzzle') {
+    gameInfoCard.hidden = true;
+    return;
+  }
+  gameInfoCard.hidden = false;
+
+  if (mode === 'vs_bot') {
+    gameInfoBotRow.hidden = false;
+    gameInfoBot.textContent = LEVEL_NAMES[modeDraft.level || 3] || 'Advanced';
+  } else {
+    gameInfoBotRow.hidden = true;
+  }
+
+  let myColor = '—';
+  if (mode === 'vs_bot')          myColor = sess.botColor === 'white' ? 'Black' : 'White';
+  else if (mode === 'local')      myColor = 'Both';
+  else if (mode === 'multiplayer' && state.yourColor) {
+    myColor = state.yourColor === 'white' ? 'White' : 'Black';
+  }
+  gameInfoCol.textContent = myColor;
+
+  if (mode === 'vs_bot') {
+    const hist = state.history || [];
+    const last = hist[hist.length - 1];
+    if (last && last.san) {
+      gameInfoLastRow.hidden = false;
+      gameInfoLast.textContent = last.san;
+    } else {
+      gameInfoLastRow.hidden = true;
+    }
+  } else {
+    gameInfoLastRow.hidden = true;
+  }
+
+  const statusMap = {
+    active: state.turn === 'white' ? 'White to move' : 'Black to move',
+    checkmate: 'Checkmate',
+    stalemate: 'Stalemate',
+    draw_insufficient: 'Draw',
+    draw_fifty_move: 'Draw',
+    draw_repetition: 'Draw',
+    timeout: 'Time out',
+    resign: 'Resignation',
+    abandoned: 'Abandoned',
+  };
+  gameInfoStatus.textContent = statusMap[state.status] || state.status;
+}
+
+// Resign button — visible during active bot/online games only.
+const resignBtnTop = document.querySelector('#resign-button');
+function refreshResignBtn(state) {
+  if (!resignBtnTop) return;
+  const sess = state && state.session;
+  const mode = sess && sess.mode;
+  const inBotOrOnline = mode === 'vs_bot' || mode === 'multiplayer';
+  resignBtnTop.hidden = !(state && state.status === 'active' && inBotOrOnline);
+}
+if (resignBtnTop) {
+  resignBtnTop.addEventListener('click', async () => {
+    if (!lastState || lastState.status !== 'active') return;
+    const sess = lastState.session || {};
+    if (sess.mode === 'multiplayer') {
+      try { await leaveMultiplayer({ resign: true }); } catch (_) {}
+      return;
+    }
+    // Bot resignation — legacy /api/* has no resign endpoint, so we apply it
+    // locally so the end-game modal + record-on-end hooks fire correctly.
+    const userColor = sess.botColor === 'white' ? 'black' : 'white';
+    const winnerSide = userColor === 'white' ? 'black' : 'white';
+    applyState(Object.assign({}, lastState, {
+      status: 'resign',
+      winner: winnerSide,
+    }));
+  });
+}
+
+// Patch renderModeButton (called from applyState) to also drive our new cards.
+const _origRenderModeButton = renderModeButton;
+renderModeButton = function patchedRenderModeButton(state) {
+  _origRenderModeButton(state);
+  renderGameInfoCard(state);
+  refreshResignBtn(state);
+};
+
+// ============================================================
+// Persist finished bot games to /games/history (auth required).
+// ============================================================
+let _lastRecordedKey = null;
+async function maybeRecordBotGame(state) {
+  if (!currentUser || !authToken) return;
+  if (!state || state.status === 'active') return;
+  const sess = state.session || {};
+  if (sess.mode !== 'vs_bot') return;
+
+  const hist = state.history || [];
+  const moves = hist.map((h) => {
+    let uci = (h.from || '') + (h.to || '');
+    if (h.promotionKind) {
+      uci += h.promotionKind[0]; // "queen" -> "q"
+    } else if (h.promotion) {
+      uci += String(h.promotion)[0];
+    }
+    return uci;
+  }).filter((m) => m && m.length >= 4);
+
+  const key = `${state.status}|${state.winner || ''}|${moves.length}|${moves.join('')}`;
+  if (key === _lastRecordedKey) return;
+  _lastRecordedKey = key;
+
+  const userColor = sess.botColor === 'white' ? 'black' : 'white';
+  const statusMap = {
+    checkmate: state.winner ? `${state.winner}_win` : 'draw',
+    stalemate: 'draw',
+    draw_insufficient: 'draw',
+    draw_fifty_move: 'draw',
+    draw_repetition: 'draw',
+    resign: state.winner ? `${state.winner}_win` : 'aborted',
+    timeout: state.winner ? `${state.winner}_win` : 'aborted',
+    abandoned: state.winner ? `${state.winner}_win` : 'aborted',
+  };
+  const reasonMap = {
+    checkmate: 'checkmate',
+    stalemate: 'stalemate',
+    draw_insufficient: 'draw_insufficient',
+    draw_fifty_move: 'draw_50_move',
+    draw_repetition: 'draw_threefold',
+    resign: 'resignation',
+    timeout: 'timeout',
+    abandoned: 'engine_error',
+  };
+
+  try {
+    await fetch('/games/record', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        color: userColor,
+        bot_level: modeDraft.level || 3,
+        status: statusMap[state.status] || 'aborted',
+        result_reason: reasonMap[state.status] || null,
+        moves,
+        fen: state.fen || null,
+      }),
+    });
+  } catch (_) { /* non-fatal */ }
+}
+
+async function boot() {
+  buildBoardScaffold();
+
+  // 1) Silent token check (never blocks guests).
+  await checkAuthSilently();
+  await loadMultiplayerConfig();
+
+  const mode = currentUrlMode();
+
+  // 2) Protected modes require login.
+  if (modeRequiresAuth(mode) && !currentUser) {
+    switchAuthTab('login');
+    showAuthModal();
+    await loadLocalState({ openMode: false });
+    return;
+  }
+
+  // 3) Load state, then open the setup modal pre-filled. We never auto-start;
+  //    the user clicks Start to begin so all entry points feel the same.
+  await loadLocalState({ openMode: false });
+  if (mode) {
+    openModeModal({ allowCancel: false });
+    presetSetupDraftFromUrl();
+    syncModeUI();
+  } else {
+    openModeModal({ allowCancel: true });
+  }
+}
+
+boot();

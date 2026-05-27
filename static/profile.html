@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessMate &mdash; Profile</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body data-theme="warm">
+    <main class="home-shell">
+      <header class="topbar home-topbar">
+        <div class="topbar-brand">
+          <a href="/" class="brand-link" title="Home">
+            <span class="brand-mark" aria-hidden="true">&#9818;</span>
+            <div class="brand-text">
+              <p class="eyebrow">ChessMate</p>
+              <h1>Profile</h1>
+            </div>
+          </a>
+        </div>
+        <div class="topbar-actions">
+          <span class="user-chip" id="user-chip" hidden>
+            <span class="user-dot" aria-hidden="true">&#9818;</span>
+            <span id="user-name"></span>
+            <span class="user-rating" id="user-rating"></span>
+          </span>
+          <a href="/" class="ghost btn-link"><span class="btn-label">Home</span></a>
+          <button id="logout-btn" type="button" class="ghost" hidden>
+            <span class="btn-label">Logout</span>
+          </button>
+        </div>
+      </header>
+
+      <section class="profile-grid">
+
+        <div class="home-card profile-card">
+          <p class="card-eyebrow">Player</p>
+          <h3 id="profile-name">&mdash;</h3>
+          <div class="profile-stats">
+            <div class="stat">
+              <span class="stat-label">Rating</span>
+              <span class="stat-value" id="profile-rating">&mdash;</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">RD</span>
+              <span class="stat-value" id="profile-rd">&mdash;</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Games</span>
+              <span class="stat-value" id="profile-games">&mdash;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-card history-card">
+          <p class="card-eyebrow">Recent games</p>
+          <h3>Game history</h3>
+          <p class="muted history-empty" id="history-empty">No games yet. Play one to get started.</p>
+          <ol class="history-list" id="history-list" hidden></ol>
+        </div>
+
+      </section>
+
+      <footer class="home-footer">
+        <span>ChessMate &middot; profile</span>
+      </footer>
+    </main>
+
+    <!-- Guest gate: shown when no valid token. -->
+    <div class="modal-backdrop" id="auth-gate" hidden>
+      <div class="modal auth-modal" role="dialog" aria-modal="true">
+        <div class="auth-header">
+          <span class="brand-mark auth-logo" aria-hidden="true">&#9818;</span>
+          <h3>Sign in required</h3>
+          <p class="modal-text">You need an account to view your profile.</p>
+        </div>
+        <div class="modal-actions">
+          <a href="/" class="primary btn-link">Go home</a>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/board-themes.js"></script>
+    <script src="/static/profile.js" defer></script>
+  </body>
+</html>

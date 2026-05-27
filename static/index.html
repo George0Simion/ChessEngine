@@ -1,315 +1,165 @@
 <!doctype html>
-<html lang="ro">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ChessMate &mdash; PESSI vs RONALDO</title>
+    <title>ChessMate &mdash; Chess Club</title>
     <link rel="stylesheet" href="/static/styles.css">
   </head>
-  <body data-theme="dark">
-    <main class="app-shell">
-      <header class="topbar">
+  <body data-theme="warm">
+    <main class="home-shell">
+      <header class="topbar home-topbar">
         <div class="topbar-brand">
-          <span class="brand-mark" aria-hidden="true">&#9818;</span>
-          <div class="brand-text">
-            <p class="eyebrow">ChessMate</p>
-            <h1><span id="title-white">PESSI</span> <span class="vs">vs</span> <span id="title-black">RONALDO</span></h1>
-          </div>
+          <a href="/" class="brand-link" title="ChessMate">
+            <span class="brand-mark" aria-hidden="true">&#9818;</span>
+            <div class="brand-text">
+              <p class="eyebrow">ChessMate</p>
+              <h1>Chess Club</h1>
+            </div>
+          </a>
         </div>
         <div class="topbar-actions">
-          <!-- User info (hidden until logged in) -->
           <span class="user-chip" id="user-chip" hidden>
-            <span class="user-dot" aria-hidden="true">&#9829;</span>
+            <span class="user-dot" aria-hidden="true">&#9818;</span>
             <span id="user-name"></span>
             <span class="user-rating" id="user-rating"></span>
           </span>
-          <button id="logout-button" type="button" class="ghost" title="Deconectare" hidden>
-            <span class="btn-icon" aria-hidden="true">&#10230;</span>
-            <span class="btn-label">Ieșire</span>
+          <button id="profile-btn" type="button" class="ghost" hidden>
+            <span class="btn-label">Profile</span>
           </button>
-          <button id="mode-button" type="button" class="ghost" title="Schimba modul de joc">
-            <span class="btn-icon" aria-hidden="true">&#9881;</span>
-            <span class="btn-label" id="mode-button-label">1v1 Local</span>
+          <button id="logout-btn" type="button" class="ghost" hidden>
+            <span class="btn-label">Logout</span>
           </button>
-          <button type="button" class="ghost" title="Joac&#259; contra botul puternic" onclick="location.href='/bot'">
-            <span class="btn-icon" aria-hidden="true">&#129302;</span>
-            <span class="btn-label">Play Bot</span>
-          </button>
-          <button id="undo-button" type="button" class="ghost" title="Anuleaza ultima mutare" disabled>
-            <span class="btn-icon" aria-hidden="true">&#8634;</span>
-            <span class="btn-label">Undo</span>
-          </button>
-          <button id="flip-button" type="button" class="ghost" title="Roteste tabla">
-            <span class="btn-icon" aria-hidden="true">&#8645;</span>
-            <span class="btn-label">Flip</span>
-          </button>
-          <button id="reset-button" type="button" class="primary" title="Joc nou">
-            <span class="btn-icon" aria-hidden="true">&#8635;</span>
-            <span class="btn-label">Joc nou</span>
+          <button id="login-btn" type="button" class="primary">
+            <span class="btn-label">Login</span>
           </button>
         </div>
       </header>
 
-      <div class="layout">
-        <section class="play-area" aria-label="Tabla de sah">
-          <div class="player-card" id="player-top">
-            <div class="player-info">
-              <span class="player-dot black"></span>
-              <span class="player-name" data-side="black">RONALDO</span>
-              <span class="player-color">Negre</span>
-              <span class="player-clock" id="clock-top"></span>
-            </div>
-            <div class="captured-row" id="captured-by-white" aria-label="Piese capturate de albe"></div>
-          </div>
+      <section class="hero">
+        <div class="hero-inner">
+          <p class="hero-eyebrow">The Salon</p>
+          <h2 class="hero-title">Think two moves ahead.</h2>
+          <p class="hero-text">Play the in-house engine, solve tactics, or share a board with a friend.</p>
+        </div>
+        <div class="hero-piece" aria-hidden="true">&#9819;</div>
+      </section>
 
-          <div id="board" class="board" aria-label="Tabla 8x8">
-            <div class="squares-layer" id="squares-layer"></div>
-            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
-            <div class="coords-files" id="coords-files"></div>
-            <div class="coords-ranks" id="coords-ranks"></div>
-            <div class="bot-thinking" id="bot-thinking" hidden>
-              <span class="spinner" aria-hidden="true"></span>
-              <span class="bot-thinking-text">Bot gandeste...</span>
-            </div>
-            <div class="multiplayer-overlay" id="multiplayer-overlay" hidden>
-              <span class="spinner" aria-hidden="true"></span>
-              <span class="multiplayer-text">
-                <span id="multiplayer-text">Cautam adversar</span>
-                <span class="loading-dots" aria-hidden="true"></span>
-              </span>
-              <span class="multiplayer-subtext" id="multiplayer-wait">Timp in asteptare: 0:00</span>
-              <button type="button" class="ghost mp-cancel" id="multiplayer-cancel">Anuleaza cautarea</button>
-            </div>
-          </div>
+      <section class="play-grid" aria-label="Game modes">
 
-          <div class="player-card" id="player-bottom">
-            <div class="player-info">
-              <span class="player-dot white"></span>
-              <span class="player-name" data-side="white">PESSI</span>
-              <span class="player-color">Albe</span>
-              <span class="player-clock" id="clock-bottom"></span>
-            </div>
-            <div class="captured-row" id="captured-by-black" aria-label="Piese capturate de negre"></div>
-          </div>
+        <a class="play-card primary-card" href="/play/bot" data-mode="bot">
+          <div class="play-card-icon" aria-hidden="true">&#9822;</div>
+          <h3>Play Bot</h3>
+          <p>Four levels &middot; no account needed.</p>
+        </a>
 
-          <div class="status-bar" id="status-bar" role="status" aria-live="polite">
-            <span class="turn-pill" id="turn-pill">
-              <span class="turn-dot"></span>
-              <span id="turn-text">Tura: Albe</span>
-            </span>
-            <span id="message" class="message"></span>
-          </div>
-        </section>
+        <a class="play-card" href="/play/local" data-mode="local">
+          <div class="play-card-icon" aria-hidden="true">&#9823;</div>
+          <h3>Local Game</h3>
+          <p>Two players, same screen.</p>
+        </a>
 
-        <aside class="side-panel" aria-label="Informatii partida">
-          <!-- Puzzle info card (visible only in puzzle mode) -->
-          <div class="puzzle-info" id="puzzle-info" hidden>
-            <div class="puzzle-info-header">
-              <span class="puzzle-rating-badge" id="puzzle-rating"></span>
-              <span class="puzzle-progress-text" id="puzzle-progress"></span>
-            </div>
-            <div class="puzzle-themes" id="puzzle-themes"></div>
-            <div class="puzzle-feedback" id="puzzle-feedback" hidden>
-              <span class="puzzle-feedback-icon" aria-hidden="true">&#8634;</span>
-              <span class="puzzle-feedback-text" id="puzzle-feedback-text">Mutare greșită — mai încearcă!</span>
-            </div>
-            <div class="puzzle-actions">
-              <button type="button" class="ghost puzzle-btn" id="puzzle-hint-btn" title="Arată mutarea corectă">
-                <span class="btn-icon" aria-hidden="true">&#128161;</span>
-                <span class="btn-label">Ajutor</span>
-              </button>
-              <button type="button" class="ghost puzzle-btn" id="puzzle-random-btn">
-                <span class="btn-icon" aria-hidden="true">&#127922;</span>
-                <span class="btn-label">Puzzle aleator</span>
-              </button>
-              <button type="button" class="ghost puzzle-btn" id="puzzle-theme-btn">
-                <span class="btn-icon" aria-hidden="true">&#128269;</span>
-                <span class="btn-label">Caută temă</span>
-              </button>
-            </div>
-          </div>
+        <a class="play-card needs-auth" href="/play/online" data-mode="online">
+          <div class="play-card-icon" aria-hidden="true">&#9820;</div>
+          <h3>Play Online</h3>
+          <p>Blitz / rapid matchmaking.</p>
+          <span class="play-card-locked" aria-hidden="true">&#128274;</span>
+        </a>
 
-          <div class="panel-header" id="history-header">
-            <h2>Istoric mutari</h2>
-            <span class="badge" id="move-count">0</span>
+        <a class="play-card needs-auth" href="/puzzles" data-mode="puzzle">
+          <div class="play-card-icon" aria-hidden="true">&#9821;</div>
+          <h3>Puzzles</h3>
+          <p>Tactical positions from Lichess.</p>
+          <span class="play-card-locked" aria-hidden="true">&#128274;</span>
+        </a>
+
+      </section>
+
+      <section class="home-side-grid">
+
+        <div class="home-card profile-card" id="profile-card" hidden>
+          <p class="card-eyebrow">Your card</p>
+          <h3 id="profile-card-name">&mdash;</h3>
+          <div class="profile-stats">
+            <div class="stat">
+              <span class="stat-label">Rating</span>
+              <span class="stat-value" id="profile-rating">&mdash;</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">RD</span>
+              <span class="stat-value" id="profile-rd">&mdash;</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Games</span>
+              <span class="stat-value" id="profile-games">&mdash;</span>
+            </div>
           </div>
-          <ol class="moves-list" id="moves-list"></ol>
-          <div class="panel-empty" id="moves-empty">
-            Inca nu s-a jucat nicio mutare.<br>
-            <span class="hint">Clic pe o piesa alba pentru a incepe.</span>
-          </div>
-        </aside>
-      </div>
+        </div>
+
+        <div class="home-card guest-card" id="guest-card">
+          <p class="card-eyebrow">Guest</p>
+          <h3>You are playing as a guest</h3>
+          <p class="muted">Bot and local games are free. Online and puzzles need an account.</p>
+          <button type="button" class="primary" id="guest-login-btn">Sign in</button>
+        </div>
+
+        <div class="home-card settings-card">
+          <p class="card-eyebrow">Board</p>
+          <h3>Board theme</h3>
+          <label class="form-label" for="board-theme-picker">Choose a board</label>
+          <select id="board-theme-picker" class="board-theme-picker"></select>
+        </div>
+
+      </section>
+
+      <footer class="home-footer">
+        <span>ChessMate &middot; in-house engine</span>
+      </footer>
     </main>
 
-    <!-- Mode-select modal -->
-    <div class="modal-backdrop" id="mode-modal" hidden>
-      <div class="modal mode-modal" role="dialog" aria-modal="true" aria-labelledby="mode-title">
-        <h3 id="mode-title">Alege modul de joc</h3>
-        <p class="modal-text">Alege modul de joc pentru sesiunea curenta.</p>
-
-        <div class="mode-choices" id="mode-choices">
-          <button type="button" class="mode-tile selected" data-mode="local">
-            <div class="mode-icon" aria-hidden="true">&#128101;</div>
-            <div class="mode-name">1v1 Local</div>
-            <div class="mode-desc">Doi jucatori, acelasi calculator.</div>
-          </button>
-          <button type="button" class="mode-tile" data-mode="vs_bot">
-            <div class="mode-icon" aria-hidden="true">&#129302;</div>
-            <div class="mode-name">Contra bot</div>
-            <div class="mode-desc">Joaca impotriva motorului.</div>
-          </button>
-          <button type="button" class="mode-tile" data-mode="multiplayer">
-            <div class="mode-icon" aria-hidden="true">&#127942;</div>
-            <div class="mode-name">Online</div>
-            <div class="mode-desc">Matchmaking cu alti jucatori.</div>
-          </button>
-          <button type="button" class="mode-tile" data-mode="puzzle">
-            <div class="mode-icon" aria-hidden="true">&#129520;</div>
-            <div class="mode-name">Puzzle</div>
-            <div class="mode-desc">Rezolva pozitii tactice din Lichess.</div>
-          </button>
-        </div>
-
-        <div class="mode-options" id="mode-options" hidden>
-          <div class="mode-options-row">
-            <h4>Joaca cu</h4>
-            <div class="pill-choices" id="color-choices">
-              <button type="button" class="pill selected" data-color="white">Albe</button>
-              <button type="button" class="pill" data-color="black">Negre</button>
-              <button type="button" class="pill" data-color="random">Aleator</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="mode-options" id="multiplayer-options" hidden>
-          <div class="mode-options-row">
-            <h4>Timp</h4>
-            <div class="pill-choices" id="time-choices">
-              <button type="button" class="pill selected" data-minutes="3">3+2</button>
-              <button type="button" class="pill" data-minutes="5">5+2</button>
-              <button type="button" class="pill" data-minutes="10">10+2</button>
-            </div>
-          </div>
-          <p class="modal-hint">Increment fix 2 secunde la fiecare mutare.</p>
-        </div>
-
-        <div class="mode-options" id="puzzle-options" hidden>
-          <div class="mode-options-row">
-            <h4>Temă</h4>
-            <div class="theme-search-wrap">
-              <input type="text" class="form-input" id="puzzle-theme-search"
-                     list="theme-datalist-modal"
-                     placeholder="Caută temă (ex: fork, pin, mate)…"
-                     autocomplete="off">
-              <datalist id="theme-datalist-modal"></datalist>
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-actions">
-          <button type="button" class="ghost" id="mode-cancel">Inapoi</button>
-          <button type="button" class="primary" id="mode-start">Start</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Promotion modal -->
-    <div class="modal-backdrop" id="promo-modal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promo-title">
-        <h3 id="promo-title">Promovare pion</h3>
-        <p class="modal-text">Alege piesa pe care o vrei in locul pionului.</p>
-        <div class="promo-choices" id="promo-choices"></div>
-      </div>
-    </div>
-
-    <!-- Game over modal -->
-    <div class="modal-backdrop" id="endgame-modal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="endgame-title">
-        <div class="endgame-icon" id="endgame-icon" aria-hidden="true">&#9812;</div>
-        <h3 id="endgame-title">Sah-mat!</h3>
-        <p class="modal-text" id="endgame-text">Albele castiga.</p>
-        <div class="modal-actions">
-          <button type="button" class="ghost" id="endgame-close">Vezi tabla</button>
-          <button type="button" class="primary" id="endgame-reset">Joc nou</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Puzzle solved modal -->
-    <div class="modal-backdrop" id="puzzle-solved-modal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-solved-title">
-        <div class="endgame-icon" aria-hidden="true">&#129520;</div>
-        <h3 id="puzzle-solved-title">Puzzle rezolvat!</h3>
-        <p class="modal-text" id="puzzle-solved-text">Felicitari! Ai gasit toate mutarile corecte.</p>
-        <div class="modal-actions">
-          <button type="button" class="ghost" id="puzzle-solved-close">Vezi tabla</button>
-          <button type="button" class="primary" id="puzzle-solved-next">Puzzle nou</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Puzzle theme picker modal -->
-    <div class="modal-backdrop" id="puzzle-theme-modal" hidden>
-      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-theme-title">
-        <h3 id="puzzle-theme-title">Alege o temă</h3>
-        <p class="modal-text">Scrie sau alege o temă pentru puzzle-ul următor.</p>
-        <div class="theme-search-wrap">
-          <input type="text" class="form-input" id="puzzle-theme-picker-search"
-                 list="theme-datalist-picker"
-                 placeholder="Caută temă (ex: fork, pin, mate)…"
-                 autocomplete="off">
-          <datalist id="theme-datalist-picker"></datalist>
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="ghost" id="puzzle-theme-cancel">Anulează</button>
-          <button type="button" class="primary" id="puzzle-theme-start">Start</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Auth modal (shown on first load; hidden after login) -->
-    <div class="modal-backdrop" id="auth-modal">
+    <div class="modal-backdrop" id="auth-modal" hidden>
       <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <button type="button" class="modal-close" id="auth-modal-close" aria-label="Close">&times;</button>
         <div class="auth-header">
           <span class="brand-mark auth-logo" aria-hidden="true">&#9818;</span>
-          <h3 id="auth-title">ChessMate</h3>
-          <p class="modal-text">Conectează-te sau creează un cont nou.</p>
+          <h3 id="auth-title">Sign in</h3>
+          <p class="modal-text">Log in or create a new account.</p>
         </div>
 
         <div class="auth-tabs">
-          <button type="button" class="auth-tab active" id="auth-tab-login">Conectare</button>
-          <button type="button" class="auth-tab" id="auth-tab-register">Cont nou</button>
+          <button type="button" class="auth-tab active" id="auth-tab-login">Login</button>
+          <button type="button" class="auth-tab" id="auth-tab-register">New account</button>
         </div>
 
         <p class="auth-error" id="auth-error" aria-live="polite"></p>
 
         <form id="auth-login-form">
           <div class="form-group">
-            <label class="form-label" for="login-username">Utilizator</label>
+            <label class="form-label" for="login-username">Username</label>
             <input class="form-input" type="text" id="login-username" placeholder="username" autocomplete="username">
           </div>
           <div class="form-group">
-            <label class="form-label" for="login-password">Parolă</label>
-            <input class="form-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+            <label class="form-label" for="login-password">Password</label>
+            <input class="form-input" type="password" id="login-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password">
           </div>
-          <button type="submit" class="primary auth-submit" id="login-submit">Conectează-te</button>
+          <button type="submit" class="primary auth-submit" id="login-submit">Sign in</button>
         </form>
 
         <form id="auth-register-form" hidden>
           <div class="form-group">
-            <label class="form-label" for="register-username">Utilizator</label>
-            <input class="form-input" type="text" id="register-username" placeholder="alege un username" autocomplete="username">
+            <label class="form-label" for="register-username">Username</label>
+            <input class="form-input" type="text" id="register-username" placeholder="pick a username" autocomplete="username">
           </div>
           <div class="form-group">
-            <label class="form-label" for="register-password">Parolă</label>
-            <input class="form-input" type="password" id="register-password" placeholder="min. 6 caractere" autocomplete="new-password">
+            <label class="form-label" for="register-password">Password</label>
+            <input class="form-input" type="password" id="register-password" placeholder="min. 6 chars" autocomplete="new-password">
           </div>
-          <button type="submit" class="primary auth-submit" id="register-submit">Creează cont</button>
+          <button type="submit" class="primary auth-submit" id="register-submit">Create account</button>
         </form>
       </div>
     </div>
 
-    <script src="/static/app.js" defer></script>
+    <script src="/static/board-themes.js"></script>
+    <script src="/static/home.js" defer></script>
   </body>
 </html>

@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessMate &mdash; Play</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body data-theme="warm">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <a href="/" class="brand-link" title="Home">
+            <span class="brand-mark" aria-hidden="true">&#9818;</span>
+            <div class="brand-text">
+              <p class="eyebrow">ChessMate</p>
+              <h1><span id="title-white">White</span> <span class="vs">vs</span> <span id="title-black">Black</span></h1>
+            </div>
+          </a>
+        </div>
+        <div class="topbar-actions">
+          <span class="user-chip" id="user-chip" hidden>
+            <span class="user-dot" aria-hidden="true">&#9818;</span>
+            <span id="user-name"></span>
+            <span class="user-rating" id="user-rating"></span>
+          </span>
+          <a href="/profile" id="profile-link" class="ghost btn-link" title="Profile" hidden>
+            <span class="btn-label">Profile</span>
+          </a>
+          <button id="login-shortcut" type="button" class="ghost" title="Login" hidden>
+            <span class="btn-label">Login</span>
+          </button>
+          <button id="logout-button" type="button" class="ghost" title="Logout" hidden>
+            <span class="btn-label">Logout</span>
+          </button>
+          <button id="mode-button" type="button" class="ghost" title="Change game mode">
+            <span class="btn-label" id="mode-button-label">Local</span>
+          </button>
+          <select id="board-theme-picker" class="board-theme-picker" title="Board theme" aria-label="Board theme"></select>
+          <button id="undo-button" type="button" class="ghost" title="Undo" disabled>
+            <span class="btn-label">Undo</span>
+          </button>
+          <button id="flip-button" type="button" class="ghost" title="Flip board">
+            <span class="btn-label">Flip</span>
+          </button>
+          <button id="resign-button" type="button" class="ghost danger" title="Resign" hidden>
+            <span class="btn-label">Resign</span>
+          </button>
+          <button id="reset-button" type="button" class="primary" title="New game">
+            <span class="btn-label">New Game</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="play-area" aria-label="Chessboard">
+          <div class="player-card" id="player-top">
+            <div class="player-info">
+              <span class="player-dot black"></span>
+              <span class="player-name" data-side="black">Black</span>
+              <span class="player-color">Black</span>
+              <span class="player-clock" id="clock-top"></span>
+            </div>
+            <div class="captured-row" id="captured-by-white" aria-label="Pieces captured by white"></div>
+          </div>
+
+          <div id="board" class="board" aria-label="Chessboard">
+            <div class="squares-layer" id="squares-layer"></div>
+            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
+            <div class="coords-files" id="coords-files"></div>
+            <div class="coords-ranks" id="coords-ranks"></div>
+            <div class="bot-thinking" id="bot-thinking" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="bot-thinking-text">Bot is thinking...</span>
+            </div>
+            <div class="multiplayer-overlay" id="multiplayer-overlay" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="multiplayer-text">
+                <span id="multiplayer-text">Looking for an opponent</span>
+                <span class="loading-dots" aria-hidden="true"></span>
+              </span>
+              <span class="multiplayer-subtext" id="multiplayer-wait">Wait time: 0:00</span>
+              <button type="button" class="ghost mp-cancel" id="multiplayer-cancel">Cancel search</button>
+            </div>
+          </div>
+
+          <div class="player-card" id="player-bottom">
+            <div class="player-info">
+              <span class="player-dot white"></span>
+              <span class="player-name" data-side="white">White</span>
+              <span class="player-color">White</span>
+              <span class="player-clock" id="clock-bottom"></span>
+            </div>
+            <div class="captured-row" id="captured-by-black" aria-label="Pieces captured by black"></div>
+          </div>
+
+          <div class="status-bar" id="status-bar" role="status" aria-live="polite">
+            <span class="turn-pill" id="turn-pill">
+              <span class="turn-dot"></span>
+              <span id="turn-text">White to move</span>
+            </span>
+            <span id="message" class="message"></span>
+          </div>
+        </section>
+
+        <aside class="side-panel" aria-label="Game info">
+          <!-- Game-info card: bot level, your color, last bot move. -->
+          <div class="game-info-card" id="game-info-card" hidden>
+            <div class="info-row" id="info-row-bot" hidden>
+              <span class="info-label">Bot level</span>
+              <span class="info-value" id="info-bot-level">&mdash;</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Your color</span>
+              <span class="info-value" id="info-your-color">&mdash;</span>
+            </div>
+            <div class="info-row" id="info-row-last" hidden>
+              <span class="info-label">Last bot move</span>
+              <span class="info-value mono" id="info-last-bot">&mdash;</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Status</span>
+              <span class="info-value" id="info-status">In progress</span>
+            </div>
+          </div>
+
+          <!-- Puzzle info card (visible only in puzzle mode) -->
+          <div class="puzzle-info" id="puzzle-info" hidden>
+            <div class="puzzle-info-header">
+              <span class="puzzle-rating-badge" id="puzzle-rating"></span>
+              <span class="puzzle-progress-text" id="puzzle-progress"></span>
+            </div>
+            <div class="puzzle-themes" id="puzzle-themes"></div>
+            <div class="puzzle-feedback" id="puzzle-feedback" hidden>
+              <span class="puzzle-feedback-icon" aria-hidden="true">&#8634;</span>
+              <span class="puzzle-feedback-text" id="puzzle-feedback-text">Wrong move &mdash; try again.</span>
+            </div>
+            <div class="puzzle-actions">
+              <button type="button" class="ghost puzzle-btn" id="puzzle-hint-btn" title="Show the correct move">
+                <span class="btn-label">Hint</span>
+              </button>
+              <button type="button" class="ghost puzzle-btn" id="puzzle-random-btn">
+                <span class="btn-label">Random puzzle</span>
+              </button>
+              <button type="button" class="ghost puzzle-btn" id="puzzle-theme-btn">
+                <span class="btn-label">Search theme</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-header" id="history-header">
+            <h2>Moves</h2>
+            <span class="badge" id="move-count">0</span>
+          </div>
+          <ol class="moves-list" id="moves-list"></ol>
+          <div class="panel-empty" id="moves-empty">
+            No moves yet.<br>
+            <span class="hint">Click a piece to start.</span>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- Mode-select modal -->
+    <div class="modal-backdrop" id="mode-modal" hidden>
+      <div class="modal mode-modal" role="dialog" aria-modal="true" aria-labelledby="mode-title">
+        <h3 id="mode-title">New game</h3>
+        <p class="modal-text">Pick a mode and start.</p>
+
+        <div class="mode-choices" id="mode-choices">
+          <button type="button" class="mode-tile selected" data-mode="local">
+            <div class="mode-icon" aria-hidden="true">&#9823;</div>
+            <div class="mode-name">Local Game</div>
+            <div class="mode-desc">Two players, same screen.</div>
+          </button>
+          <button type="button" class="mode-tile" data-mode="vs_bot">
+            <div class="mode-icon" aria-hidden="true">&#9822;</div>
+            <div class="mode-name">Play Bot</div>
+            <div class="mode-desc">In-house engine, four levels.</div>
+          </button>
+          <button type="button" class="mode-tile" data-mode="multiplayer">
+            <div class="mode-icon" aria-hidden="true">&#9820;</div>
+            <div class="mode-name">Online</div>
+            <div class="mode-desc">Blitz / rapid matchmaking.</div>
+          </button>
+          <button type="button" class="mode-tile" data-mode="puzzle">
+            <div class="mode-icon" aria-hidden="true">&#9821;</div>
+            <div class="mode-name">Puzzles</div>
+            <div class="mode-desc">Tactical positions from Lichess.</div>
+          </button>
+        </div>
+
+        <div class="mode-options" id="mode-options" hidden>
+          <div class="mode-options-row">
+            <h4>Your color</h4>
+            <div class="pill-choices" id="color-choices">
+              <button type="button" class="pill selected" data-color="white">White</button>
+              <button type="button" class="pill" data-color="black">Black</button>
+              <button type="button" class="pill" data-color="random">Random</button>
+            </div>
+          </div>
+          <div class="mode-options-row" id="level-row" hidden>
+            <h4>Bot level</h4>
+            <div class="pill-choices" id="level-choices">
+              <button type="button" class="pill" data-level="1">Beginner</button>
+              <button type="button" class="pill" data-level="2">Medium</button>
+              <button type="button" class="pill selected" data-level="3">Advanced</button>
+              <button type="button" class="pill" data-level="4">Expert</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mode-options" id="multiplayer-options" hidden>
+          <div class="mode-options-row">
+            <h4>Time</h4>
+            <div class="pill-choices" id="time-choices">
+              <button type="button" class="pill selected" data-minutes="3">3+2</button>
+              <button type="button" class="pill" data-minutes="5">5+2</button>
+              <button type="button" class="pill" data-minutes="10">10+2</button>
+            </div>
+          </div>
+          <p class="modal-hint">Two-second increment per move.</p>
+        </div>
+
+        <div class="mode-options" id="puzzle-options" hidden>
+          <div class="mode-options-row">
+            <h4>Theme</h4>
+            <div class="theme-search-wrap">
+              <input type="text" class="form-input" id="puzzle-theme-search"
+                     list="theme-datalist-modal"
+                     placeholder="Search a theme (e.g. fork, pin, mate)&hellip;"
+                     autocomplete="off">
+              <datalist id="theme-datalist-modal"></datalist>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <a href="/" class="ghost btn-link" id="mode-home">&larr; Home</a>
+          <button type="button" class="ghost" id="mode-cancel" hidden>Back</button>
+          <button type="button" class="primary" id="mode-start">Start Game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promotion modal -->
+    <div class="modal-backdrop" id="promo-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+        <h3 id="promo-title">Pawn promotion</h3>
+        <p class="modal-text">Pick a piece.</p>
+        <div class="promo-choices" id="promo-choices"></div>
+      </div>
+    </div>
+
+    <!-- Game over modal -->
+    <div class="modal-backdrop" id="endgame-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="endgame-title">
+        <div class="endgame-icon" id="endgame-icon" aria-hidden="true">&#9812;</div>
+        <h3 id="endgame-title">Game over</h3>
+        <p class="modal-text" id="endgame-text">White wins.</p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="endgame-close">View board</button>
+          <button type="button" class="primary" id="endgame-reset">New game</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Puzzle solved modal -->
+    <div class="modal-backdrop" id="puzzle-solved-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-solved-title">
+        <div class="endgame-icon" aria-hidden="true">&#9821;</div>
+        <h3 id="puzzle-solved-title">Puzzle solved!</h3>
+        <p class="modal-text" id="puzzle-solved-text">Nice work &mdash; you found every correct move.</p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="puzzle-solved-close">View board</button>
+          <button type="button" class="primary" id="puzzle-solved-next">Next puzzle</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Puzzle theme picker modal -->
+    <div class="modal-backdrop" id="puzzle-theme-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-theme-title">
+        <h3 id="puzzle-theme-title">Pick a theme</h3>
+        <p class="modal-text">Type or choose a theme for the next puzzle.</p>
+        <div class="theme-search-wrap">
+          <input type="text" class="form-input" id="puzzle-theme-picker-search"
+                 list="theme-datalist-picker"
+                 placeholder="Search a theme (e.g. fork, pin, mate)&hellip;"
+                 autocomplete="off">
+          <datalist id="theme-datalist-picker"></datalist>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="puzzle-theme-cancel">Cancel</button>
+          <button type="button" class="primary" id="puzzle-theme-start">Start</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auth modal (shown only when login is required for an action). -->
+    <div class="modal-backdrop" id="auth-modal" hidden>
+      <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <button type="button" class="modal-close" id="auth-modal-close" title="Close" aria-label="Close">&times;</button>
+        <div class="auth-header">
+          <span class="brand-mark auth-logo" aria-hidden="true">&#9818;</span>
+          <h3 id="auth-title">Sign in</h3>
+          <p class="modal-text">Log in or create a new account.</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" id="auth-tab-login">Login</button>
+          <button type="button" class="auth-tab" id="auth-tab-register">New account</button>
+        </div>
+
+        <p class="auth-error" id="auth-error" aria-live="polite"></p>
+
+        <form id="auth-login-form">
+          <div class="form-group">
+            <label class="form-label" for="login-username">Username</label>
+            <input class="form-input" type="text" id="login-username" placeholder="username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Password</label>
+            <input class="form-input" type="password" id="login-password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" autocomplete="current-password">
+          </div>
+          <button type="submit" class="primary auth-submit" id="login-submit">Sign in</button>
+        </form>
+
+        <form id="auth-register-form" hidden>
+          <div class="form-group">
+            <label class="form-label" for="register-username">Username</label>
+            <input class="form-input" type="text" id="register-username" placeholder="pick a username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="register-password">Password</label>
+            <input class="form-input" type="password" id="register-password" placeholder="min. 6 chars" autocomplete="new-password">
+          </div>
+          <button type="submit" class="primary auth-submit" id="register-submit">Create account</button>
+        </form>
+      </div>
+    </div>
+
+    <script src="/static/board-themes.js"></script>
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>

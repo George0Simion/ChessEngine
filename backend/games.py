@@ -310,6 +310,113 @@ def submit_move(current_user, game_id):
 # ---------------------------------------------------------------------------
 # Endpoint: resign
 # ---------------------------------------------------------------------------
+@games_bp.get('/history')
+@token_required
+def history(current_user):
+    """Return the authenticated user's persisted games (bot + online).
+    Excludes puzzle attempts, which are not stored in the games table."""
+    rows = (Game.query
+            .filter((Game.white_id == current_user.id) |
+                    (Game.black_id == current_user.id))
+            .order_by(Game.created_at.desc())
+            .limit(100)
+            .all())
+
+    out = []
+    for g in rows:
+        user_color = "white" if g.white_id == current_user.id else "black"
+        opp_is_bot = g.black_is_bot if user_color == "white" else g.white_is_bot
+        if opp_is_bot:
+            opponent = f"Bot level {g.bot_level or 3}"
+            mode = "bot"
+        else:
+            opponent = "Online"
+            mode = "online"
+
+        if g.status == "active":
+            result = "in_progress"
+        elif g.status == "draw":
+            result = "draw"
+        elif g.status == "aborted":
+            result = "aborted"
+        elif g.status == f"{user_color}_win":
+            result = "win"
+        else:
+            result = "loss"
+
+        moves_count = len((g.moves_history or "").split())
+
+        out.append({
+            "id":            g.id,
+            "mode":          mode,
+            "opponent":      opponent,
+            "user_color":    user_color,
+            "result":        result,
+            "result_reason": g.result_reason,
+            "moves_count":   moves_count,
+            "bot_level":     g.bot_level,
+            "created_at":    g.created_at.isoformat() if g.created_at else None,
+            "updated_at":    g.updated_at.isoformat() if g.updated_at else None,
+        })
+
+    return jsonify({"ok": True, "games": out})
+
+
+@games_bp.post('/record')
+@token_required
+def record(current_user):
+    """Persist a finished bot game played via the legacy /api/* flow.
+
+    The unified play page uses session-based legacy endpoints (so guests can
+    play). When the player is authenticated and a bot game ends, the frontend
+    posts the final outcome here so it shows up in their /games/history.
+    """
+    data = request.get_json(silent=True) or {}
+    color = (data.get("color") or "").strip().lower()
+    if color not in {"white", "black"}:
+        return jsonify({"ok": False, "error": "invalid color"}), 400
+
+    try:
+        bot_level = int(data.get("bot_level")) if data.get("bot_level") else None
+    except (TypeError, ValueError):
+        bot_level = None
+
+    status = (data.get("status") or "active").strip()
+    reason = data.get("result_reason")
+    moves = data.get("moves") or []
+    fen = data.get("fen") or FEN_START
+
+    if not isinstance(moves, list):
+        moves = []
+
+    g = Game(
+        current_fen=fen,
+        moves_history=" ".join(moves),
+        status=status,
+        result_reason=reason,
+        bot_level=bot_level,
+    )
+    if color == "white":
+        g.white_id = current_user.id
+        g.white_is_bot = False
+        g.black_is_bot = True
+    else:
+        g.black_id = current_user.id
+        g.black_is_bot = False
+        g.white_is_bot = True
+
+    if status == "white_win":
+        g.winner = "white"
+    elif status == "black_win":
+        g.winner = "black"
+
+    g.updated_at = datetime.utcnow()
+    db.session.add(g)
+    db.session.commit()
+
+    return jsonify({"ok": True, "game_id": g.id}), 201
+
+
 @games_bp.post('/<int:game_id>/resign')
 @token_required
 def resign(current_user, game_id):
