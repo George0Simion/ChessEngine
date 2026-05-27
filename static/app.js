@@ -29,6 +29,7 @@ let pieceById = {};            // id -> { square, color, kind, element }
 let pieceIdSeq = 0;
 let interactionLocked = false; // brief lock while a move animates
 let botPending = false;        // a /api/bot_move call is in-flight or queued
+let botRequestSeq = 0;         // invalidates stale bot replies after a new game starts
 let mpSocket = null;
 let mpStatus = "idle";          // idle | queue | active
 let mpInfo = null;              // { roomId, color, opponent, timeControl }
@@ -441,6 +442,31 @@ function renderMoves(state) {
   movesList.scrollTop = movesList.scrollHeight;
 }
 
+function clearMoveHistoryPanel() {
+  moveCountBadge.textContent = "0";
+  movesList.innerHTML = "";
+  movesList.scrollTop = 0;
+  movesEmpty.style.display = "block";
+}
+
+function resetTransientGameUi({ clearHistory = false, hidePuzzleUi = true } = {}) {
+  selectedSquare = null;
+  legalMoves = [];
+  pendingPromotion = null;
+  promoModal.hidden = true;
+  setMessage("");
+  endgameModal.hidden = true;
+  endgameSeen = false;
+  if (clearHistory) {
+    clearMoveHistoryPanel();
+  }
+  if (hidePuzzleUi) {
+    hidePuzzleFeedback();
+    puzzleSolvedModal.hidden = true;
+    puzzleThemeModal.hidden = true;
+  }
+}
+
 function renderCaptured(state) {
   const captured = state.captured || { white: [], black: [] };
   capturedByBlack.innerHTML = "";
@@ -574,7 +600,12 @@ function renderModeButton(state) {
 function renderPuzzleInfo(state) {
   const inPuzzle = isPuzzleMode(state);
   puzzleInfoEl.hidden = !inPuzzle;
-  if (!inPuzzle) return;
+  if (!inPuzzle) {
+    hidePuzzleFeedback();
+    puzzleSolvedModal.hidden = true;
+    puzzleThemeModal.hidden = true;
+    return;
+  }
 
   const puzzle = state.puzzle || {};
   const colorLabel = puzzle.solverColor === "white" ? "White" : "Black";
@@ -618,9 +649,8 @@ async function loadPuzzle(theme) {
     });
     const data = await response.json();
     if (!data.ok) throw new Error(data.error || "Nu pot încărca puzzle-ul.");
-    setMessage("");
-    endgameModal.hidden = true;
-    endgameSeen = false;
+    cancelPendingBotMove();
+    resetTransientGameUi({ clearHistory: true, hidePuzzleUi: false });
     puzzleSolvedModal.hidden = true;
     lastState = null;
     // Auto-flip: solver with black pieces at bottom
@@ -644,7 +674,7 @@ async function loadPuzzle(theme) {
 let _puzzleFeedbackTimer = null;
 
 function showPuzzleFeedback(message, kind = "hint") {
-  if (!puzzleFeedbackEl) return;
+  if (!puzzleFeedbackEl || !isPuzzleMode(lastState)) return;
   if (puzzleFeedbackTextEl) puzzleFeedbackTextEl.textContent = message;
   puzzleFeedbackEl.dataset.kind = kind;
   // Force animation re-trigger so color change is visually immediate
@@ -756,25 +786,38 @@ async function scheduleBotMoveIfNeeded(state) {
   if (botPending) return;
   if (!isBotsTurn(state)) return;
 
+  const requestSeq = ++botRequestSeq;
   botPending = true;
   showBotThinking(true);
   // Small delay so the previous animation finishes and the indicator is visible.
   await sleep(200);
+  if (requestSeq !== botRequestSeq) return;
 
   try {
     const response = await fetch("/api/bot_move", { method: "POST" });
     const data = await response.json();
+    if (requestSeq !== botRequestSeq) return;
     if (!response.ok || !data.ok) {
       throw new Error(data.error || "Botul a esuat.");
     }
     setMessage("");
     applyState(data.state);
   } catch (err) {
-    setMessage("Bot: " + err.message);
+    if (requestSeq === botRequestSeq) {
+      setMessage("Bot: " + err.message);
+    }
   } finally {
-    showBotThinking(false);
-    botPending = false;
+    if (requestSeq === botRequestSeq) {
+      showBotThinking(false);
+      botPending = false;
+    }
   }
+}
+
+function cancelPendingBotMove() {
+  botRequestSeq += 1;
+  botPending = false;
+  showBotThinking(false);
 }
 
 function showBotThinking(visible) {
@@ -984,11 +1027,7 @@ async function performReset() {
   try {
     const response = await fetch("/api/reset", { method: "POST" });
     const data = await response.json();
-    selectedSquare = null;
-    legalMoves = [];
-    setMessage("");
-    endgameModal.hidden = true;
-    endgameSeen = false;
+    resetTransientGameUi({ clearHistory: true });
     lastState = null;
     applyState(data.state);
   } finally {
@@ -1149,6 +1188,9 @@ async function startSelectedMode() {
   }
 
   closeModeModal();
+  cancelPendingBotMove();
+  resetTransientGameUi({ clearHistory: true });
+  lastState = null;
 
   try {
     const response = await fetch("/api/new_game", {
@@ -1158,12 +1200,6 @@ async function startSelectedMode() {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Nu pot porni jocul.");
-    selectedSquare = null;
-    legalMoves = [];
-    setMessage("");
-    endgameModal.hidden = true;
-    endgameSeen = false;
-    lastState = null;
     applyState(data.state);
   } catch (err) {
     setMessage("Mod: " + err.message);
@@ -1311,6 +1347,10 @@ async function startMultiplayer(minutes) {
   if (mpStatus === "queue" || mpStatus === "active") {
     await leaveMultiplayer({ resign: mpStatus === "active", silent: true });
   }
+
+  cancelPendingBotMove();
+  resetTransientGameUi({ clearHistory: true });
+  lastState = null;
 
   try {
     const response = await fetch("/api/new_game", {

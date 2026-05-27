@@ -1097,6 +1097,10 @@ button:disabled {
 
 /* ========================= Puzzle module ========================= */
 
+[hidden] {
+  display: none !important;
+}
+
 /* Puzzle info card in side panel */
 .puzzle-info {
   background: var(--panel-elevated);
@@ -1653,5 +1657,4 @@ button.ghost.danger:hover:not(:disabled) {
 .result-pill.win  { background: rgba(104, 128, 70, 0.20); color: #b8d391; }
 .result-pill.loss { background: var(--danger-soft);       color: #e2a6a0; }
 .result-pill.draw { background: var(--accent-soft);       color: var(--accent-strong); }
-
 

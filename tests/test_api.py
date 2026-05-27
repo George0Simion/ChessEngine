@@ -88,6 +88,19 @@ class ApiTest(unittest.TestCase):
         self.assertEqual("vs_bot", payload["state"]["session"]["mode"])
         self.assertEqual("black", payload["state"]["session"]["botColor"])
 
+    def test_new_bot_game_resets_move_history(self):
+        self.client.post("/api/move", json={"from": "e2", "to": "e4"})
+        self.client.post("/api/move", json={"from": "e7", "to": "e5"})
+
+        response = self.client.post(
+            "/api/new_game",
+            json={"mode": "vs_bot", "botColor": "black"},
+        )
+
+        payload = response.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual([], payload["state"]["history"])
+
     def test_move_endpoint_records_history_with_san(self):
         self.client.post("/api/move", json={"from": "e2", "to": "e4"})
         response = self.client.post("/api/move", json={"from": "e7", "to": "e5"})
