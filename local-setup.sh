@@ -10,6 +10,7 @@ REQUESTED_PORT=${PORT+x}
 HOST=${HOST:-127.0.0.1}
 PORT=${PORT:-5000}
 FLASK_DEBUG=${FLASK_DEBUG:-1}
+MP_PORT=${MP_PORT:-8000}
 
 if [ ! -x "$VENV_DIR/bin/python" ]; then
   echo "Creating virtual environment in $VENV_DIR"
@@ -53,4 +54,8 @@ if [ -z "$REQUESTED_PORT" ]; then
 fi
 
 echo "Starting ChessMate Sprint 3 at http://$HOST:$PORT"
-HOST="$HOST" PORT="$PORT" FLASK_DEBUG="$FLASK_DEBUG" "$VENV_DIR/bin/python" app.py
+echo "Starting multiplayer service at http://$HOST:$MP_PORT"
+MP_PORT="$MP_PORT" MP_HOST="$HOST" "$VENV_DIR/bin/python" -m uvicorn multiplayer.main:app --host "$HOST" --port "$MP_PORT" &
+MP_PID=$!
+trap 'kill "$MP_PID"' EXIT
+HOST="$HOST" PORT="$PORT" FLASK_DEBUG="$FLASK_DEBUG" MP_PORT="$MP_PORT" MP_HOST="$HOST" "$VENV_DIR/bin/python" app.py

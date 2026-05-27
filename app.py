@@ -16,8 +16,9 @@ from auth import auth_bp
 
 MODE_LOCAL = "local"      # 1v1 hot-seat
 MODE_VS_BOT = "vs_bot"    # human vs engine
+MODE_MULTIPLAYER = "multiplayer"  # online matchmaking via WebSocket
 
-VALID_MODES = {MODE_LOCAL, MODE_VS_BOT}
+VALID_MODES = {MODE_LOCAL, MODE_VS_BOT, MODE_MULTIPLAYER}
 
 
 PUZZLE_CSV_PATH = os.path.join(os.path.dirname(__file__), "lichess_db_puzzle.csv")
@@ -50,7 +51,10 @@ def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", static_url_path="/static")
 
     # ------------------------------------------------------------------ Config
-    db_url = os.environ.get("DATABASE_URL", "sqlite:///chessmate.db")
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "chessmate.db"))
+        db_url = f"sqlite:///{db_path.replace(os.sep, '/') }"
     # Heroku/Render use postgres:// but SQLAlchemy 1.4+ needs postgresql://
     if db_url.startswith("postgres://"):
         db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -102,8 +106,39 @@ def create_app() -> Flask:
         payload["session"] = session.mode_info()
         return jsonify(payload)
 
+    @app.get("/api/mp_config")
+    def mp_config():
+        mp_ws_url = os.environ.get("MP_WS_URL")
+        if mp_ws_url:
+            return jsonify({
+                "ok": True,
+                "wsUrl": mp_ws_url,
+                "baseMinutes": [3, 5, 10],
+                "incrementSec": 2,
+            })
+
+        host = os.environ.get("MP_HOST")
+        if not host:
+            host = request.host.split(":")[0]
+        mp_port = int(os.environ.get("MP_PORT", "8000"))
+        scheme = "wss" if request.scheme == "https" else "ws"
+        ws_url = f"{scheme}://{host}:{mp_port}/ws"
+        return jsonify({
+            "ok": True,
+            "wsUrl": ws_url,
+            "baseMinutes": [3, 5, 10],
+            "incrementSec": 2,
+        })
+
     @app.get("/api/moves")
     def moves():
+        if session.mode == MODE_MULTIPLAYER:
+            return jsonify({
+                "ok": False,
+                "error": "Multiplayer foloseste WebSocket pentru mutari.",
+                "moves": [],
+                "state": _state_with_session(session),
+            }), 400
         origin = request.args.get("from", "")
         try:
             return jsonify({
@@ -126,6 +161,13 @@ def create_app() -> Flask:
         origin = payload.get("from", "")
         target = payload.get("to", "")
         promotion = payload.get("promotion")
+
+        if session.mode == MODE_MULTIPLAYER:
+            return jsonify({
+                "ok": False,
+                "error": "Mutarile multiplayer se trimit prin WebSocket.",
+                "state": _state_with_session(session),
+            }), 400
 
         # In vs-bot mode we refuse to apply a move on behalf of the bot side.
         if session.mode == MODE_VS_BOT and session.bot_color == session.game.turn:
@@ -228,6 +270,9 @@ def create_app() -> Flask:
                     "error": "botColor trebuie sa fie 'white' sau 'black'.",
                 }), 400
             session.engine = build_engine("mcts")
+        elif mode == MODE_MULTIPLAYER:
+            session.engine = None
+            bot_color = None
         else:
             session.engine = None
             bot_color = None
@@ -241,6 +286,12 @@ def create_app() -> Flask:
 
     @app.post("/api/undo")
     def undo():
+        if session.mode == MODE_MULTIPLAYER:
+            return jsonify({
+                "ok": False,
+                "error": "Undo nu este disponibil in multiplayer.",
+                "state": _state_with_session(session),
+            }), 400
         try:
             # In vs-bot mode, undoing JUST the bot's reply would leave the
             # board on the bot's turn — the bot would immediately replay
@@ -265,6 +316,12 @@ def create_app() -> Flask:
 
     @app.post("/api/reset")
     def reset():
+        if session.mode == MODE_MULTIPLAYER:
+            return jsonify({
+                "ok": False,
+                "error": "Resetul multiplayer se face prin WebSocket.",
+                "state": _state_with_session(session),
+            }), 400
         """Reset the board, keeping the current mode/bot settings."""
         session.game.reset()
         return jsonify({"ok": True, "state": _state_with_session(session)})

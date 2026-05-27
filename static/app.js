@@ -29,8 +29,18 @@ let pieceById = {};            // id -> { square, color, kind, element }
 let pieceIdSeq = 0;
 let interactionLocked = false; // brief lock while a move animates
 let botPending = false;        // a /api/bot_move call is in-flight or queued
+let mpSocket = null;
+let mpStatus = "idle";          // idle | queue | active
+let mpInfo = null;              // { roomId, color, opponent, timeControl }
+let mpClock = null;             // { white, black, active }
+let mpConfig = null;
+let mpAuthPromise = null;
+let mpAuthResolve = null;
+let mpPendingMoves = null;
+let mpQueueSince = null;
+let mpQueueTimer = null;
 // Mode-select draft state (mirrors UI selection inside the modal)
-let modeDraft = { mode: "local", color: "white" };
+let modeDraft = { mode: "local", color: "white", minutes: 3 };
 
 // ----- DOM -----
 const boardEl = document.querySelector("#board");
@@ -90,12 +100,57 @@ const puzzleOptionsEl = document.querySelector("#puzzle-options");
 const puzzleThemeSearch = document.querySelector("#puzzle-theme-search"); // in mode modal
 const themeDatalistModal = document.querySelector("#theme-datalist-modal");
 const themeDatalistPicker = document.querySelector("#theme-datalist-picker");
+const titleWhiteEl = document.querySelector("#title-white");
+const titleBlackEl = document.querySelector("#title-black");
+// Multiplayer DOM
+const multiplayerOptionsEl = document.querySelector("#multiplayer-options");
+const timeChoicesWrap = document.querySelector("#time-choices");
+const mpOverlay = document.querySelector("#multiplayer-overlay");
+const mpOverlayText = document.querySelector("#multiplayer-text");
+const mpOverlayWait = document.querySelector("#multiplayer-wait");
+const mpOverlayCancel = document.querySelector("#multiplayer-cancel");
+const clockTop = document.querySelector("#clock-top");
+const clockBottom = document.querySelector("#clock-bottom");
 
 // ----- Helpers -----
 
 function setMessage(text, kind = "error") {
   messageEl.textContent = text || "";
   messageEl.className = "message" + (text ? " " + kind : "");
+}
+
+function isMultiplayerMode(state) {
+  return state && state.session && state.session.mode === "multiplayer";
+}
+
+function isMultiplayerPlayersTurn(state) {
+  return isMultiplayerMode(state) && mpInfo && state.turn === mpInfo.color;
+}
+
+function formatClock(totalSec) {
+  if (typeof totalSec !== "number") return "";
+  const safe = Math.max(0, totalSec);
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function renderMultiplayerClock(state) {
+  if (!clockTop || !clockBottom) return;
+  if (!state || !isMultiplayerMode(state) || !mpClock) {
+    clockTop.textContent = "";
+    clockBottom.textContent = "";
+    return;
+  }
+  const whiteTime = formatClock(mpClock.white);
+  const blackTime = formatClock(mpClock.black);
+  if (isFlipped) {
+    clockTop.textContent = whiteTime;
+    clockBottom.textContent = blackTime;
+  } else {
+    clockTop.textContent = blackTime;
+    clockBottom.textContent = whiteTime;
+  }
 }
 
 function squareToCoords(square) {
@@ -281,6 +336,25 @@ function projectBoard(prev, record) {
 
 // ----- Render: status, moves, captured, highlights -----
 
+function resolvePlayerNames(state) {
+  const session = state && state.session ? state.session : {};
+  if (session.mode === "multiplayer") {
+    const selfName = currentUser && currentUser.username ? currentUser.username : "Tu";
+    if (mpInfo) {
+      const oppName = mpInfo.opponent && mpInfo.opponent.username ? mpInfo.opponent.username : "Adversar";
+      const whiteName = mpInfo.color === "white" ? selfName : oppName;
+      const blackName = mpInfo.color === "black" ? selfName : oppName;
+      return { whiteName, blackName };
+    }
+    return { whiteName: selfName, blackName: "Adversar" };
+  }
+
+  const botColor = session.mode === "vs_bot" ? session.botColor : null;
+  const whiteName = botColor === "white" ? "BOT" : "PESSI";
+  const blackName = botColor === "black" ? "BOT" : "RONALDO";
+  return { whiteName, blackName };
+}
+
 function renderStatus(state) {
   const colorRo = state.turn === "white" ? "Albe" : "Negre";
   turnText.textContent = state.status === "active" ? `Tura: ${colorRo}` : labelForStatus(state);
@@ -292,10 +366,7 @@ function renderStatus(state) {
 
   // Swap player labels by current orientation. In vs-bot mode replace the
   // bot's display name so it's clear which side the engine controls.
-  const session = state.session || {};
-  const botColor = session.mode === "vs_bot" ? session.botColor : null;
-  const whiteName = botColor === "white" ? "BOT" : "PESSI";
-  const blackName = botColor === "black" ? "BOT" : "RONALDO";
+  const { whiteName, blackName } = resolvePlayerNames(state);
   const topName  = playerTopCard.querySelector(".player-name");
   const topColor = playerTopCard.querySelector(".player-color");
   const topDot   = playerTopCard.querySelector(".player-dot");
@@ -309,6 +380,9 @@ function renderStatus(state) {
     topName.textContent = blackName;  topColor.textContent = "Negre"; topDot.className = "player-dot black";
     botName.textContent = whiteName;  botColorEl.textContent = "Albe";  botDot.className = "player-dot white";
   }
+  if (titleWhiteEl) titleWhiteEl.textContent = whiteName;
+  if (titleBlackEl) titleBlackEl.textContent = blackName;
+  renderMultiplayerClock(state);
 }
 
 function labelForStatus(state) {
@@ -320,6 +394,9 @@ function labelForStatus(state) {
   if (state.status === "draw_insufficient") return "Remiza — material insuficient";
   if (state.status === "draw_fifty_move") return "Remiza — regula celor 50 de mutari";
   if (state.status === "draw_repetition") return "Remiza — repetitie triplа";
+  if (state.status === "timeout") return "Timp expirat";
+  if (state.status === "resign") return "Resemnare";
+  if (state.status === "abandoned") return "Abandon";
   return `Tura: ${state.turn === "white" ? "Albe" : "Negre"}`;
 }
 
@@ -452,6 +529,21 @@ function renderEndgame(state) {
     endgameTitle.textContent = "Remiza";
     endgameIcon.textContent = "\u00BD";
     endgameText.textContent = "Aceeasi pozitie a aparut de trei ori.";
+  } else if (state.status === "timeout") {
+    endgameTitle.textContent = "Timp expirat";
+    endgameIcon.textContent = "\u23F1";
+    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
+    endgameText.textContent = `${winner} castiga la timp.`;
+  } else if (state.status === "resign") {
+    endgameTitle.textContent = "Resemnare";
+    endgameIcon.textContent = "\u2691";
+    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
+    endgameText.textContent = `${winner} castiga prin abandon.`;
+  } else if (state.status === "abandoned") {
+    endgameTitle.textContent = "Abandon";
+    endgameIcon.textContent = "\u2691";
+    const winner = state.winnerLabel || (state.winner === "white" ? "Albe" : "Negre");
+    endgameText.textContent = `${winner} castiga dupa deconectare.`;
   } else {
     endgameTitle.textContent = "Final";
     endgameIcon.textContent = "\u00BD";
@@ -461,12 +553,15 @@ function renderEndgame(state) {
 }
 
 function renderUndoButton(state) {
-  undoButton.disabled = !state.canUndo;
+  undoButton.disabled = isMultiplayerMode(state) || !state.canUndo;
 }
 
 function renderModeButton(state) {
   const session = state.session || {};
-  if (session.mode === "vs_bot") {
+  if (session.mode === "multiplayer") {
+    const base = (mpInfo && mpInfo.timeControl && mpInfo.timeControl.baseMin) || modeDraft.minutes || 3;
+    modeButtonLabel.textContent = `Online ${base}+2`;
+  } else if (session.mode === "vs_bot") {
     const human = session.botColor === "white" ? "Negre" : "Albe";
     modeButtonLabel.textContent = `vs Bot (${human})`;
   } else if (session.mode === "puzzle") {
@@ -701,6 +796,10 @@ async function handleSquareClick(square) {
   if (interactionLocked || pendingPromotion || botPending) return;
   const state = lastState;
   if (!state || state.status !== "active") return;
+  if (isMultiplayerMode(state)) {
+    if (mpStatus !== "active") return;
+    if (!isMultiplayerPlayersTurn(state)) return;
+  }
   // Don't let the human move bot pieces.
   if (isBotsTurn(state)) return;
   // In puzzle mode, only the solver can move and only when it's their turn.
@@ -742,6 +841,25 @@ async function handleSquareClick(square) {
 }
 
 async function selectSquare(square) {
+  if (lastState && isMultiplayerMode(lastState)) {
+    try {
+      const data = await requestMultiplayerMoves(square);
+      selectedSquare = square;
+      legalMoves = data.moves || [];
+      setMessage("");
+      if (data.state) {
+        applyState(data.state);
+      } else if (lastState) {
+        renderHighlights(lastState);
+      }
+    } catch (err) {
+      selectedSquare = null;
+      legalMoves = [];
+      setMessage(err.message || "Nu pot incarca mutarile.");
+    }
+    return;
+  }
+
   const endpoint = (lastState && isPuzzleMode(lastState))
     ? `/api/puzzle/moves?from=${encodeURIComponent(square)}`
     : `/api/moves?from=${encodeURIComponent(square)}`;
@@ -762,6 +880,21 @@ async function selectSquare(square) {
 }
 
 async function submitMove(origin, target, promotion) {
+  if (lastState && isMultiplayerMode(lastState)) {
+    interactionLocked = true;
+    try {
+      await sendMultiplayerMove(origin, target, promotion);
+      selectedSquare = null;
+      legalMoves = [];
+      setMessage("");
+    } catch (err) {
+      setMessage(err.message || "Mutarea a fost respinsa.");
+    } finally {
+      setTimeout(() => { interactionLocked = false; }, 200);
+    }
+    return;
+  }
+
   interactionLocked = true;
   const inPuzzle = lastState && isPuzzleMode(lastState);
   const endpoint = inPuzzle ? "/api/puzzle/move" : "/api/move";
@@ -808,6 +941,10 @@ async function submitMove(origin, target, promotion) {
 async function performUndo() {
   if (interactionLocked || botPending) return;
   if (!lastState || !lastState.canUndo) return;
+  if (lastState && isMultiplayerMode(lastState)) {
+    setMessage("Undo nu este disponibil in multiplayer.", "info");
+    return;
+  }
   interactionLocked = true;
   try {
     const response = await fetch("/api/undo", { method: "POST" });
@@ -829,6 +966,12 @@ async function performUndo() {
 async function performReset() {
   if (interactionLocked) return;
   if (botPending) return;
+
+  if (lastState && isMultiplayerMode(lastState)) {
+    await leaveMultiplayer({ resign: true, resetSession: true });
+    await loadLocalState({ openMode: true });
+    return;
+  }
 
   // In puzzle mode, "Joc nou" loads a new random puzzle in the same theme
   if (lastState && isPuzzleMode(lastState)) {
@@ -902,6 +1045,12 @@ function openModeModal({ allowCancel = false } = {}) {
       // Human plays the opposite color of the bot.
       modeDraft.color = session.botColor === "white" ? "black" : "white";
     }
+    if (session.mode === "multiplayer") {
+      modeDraft.minutes =
+        (session.timeControl && session.timeControl.baseMin)
+        || (mpInfo && mpInfo.timeControl && mpInfo.timeControl.baseMin)
+        || modeDraft.minutes;
+    }
   }
   modeCancel.hidden = !allowCancel;
   syncModeUI();
@@ -922,18 +1071,39 @@ function syncModeUI() {
     tile.classList.toggle("selected", tile.dataset.mode === modeDraft.mode);
   }
   modeOptions.hidden = modeDraft.mode !== "vs_bot";
+  if (multiplayerOptionsEl) {
+    multiplayerOptionsEl.hidden = modeDraft.mode !== "multiplayer";
+  }
   puzzleOptionsEl.hidden = modeDraft.mode !== "puzzle";
 
   for (const pill of colorChoicesWrap.querySelectorAll(".pill")) {
     pill.classList.toggle("selected", pill.dataset.color === modeDraft.color);
   }
+  if (timeChoicesWrap) {
+    for (const pill of timeChoicesWrap.querySelectorAll(".pill")) {
+      pill.classList.toggle(
+        "selected",
+        Number(pill.dataset.minutes) === Number(modeDraft.minutes)
+      );
+    }
+  }
 }
 
 async function startSelectedMode() {
+  if (lastState && isMultiplayerMode(lastState) && modeDraft.mode !== "multiplayer") {
+    await leaveMultiplayer({ resign: true, silent: true });
+  }
+
   if (modeDraft.mode === "puzzle") {
     closeModeModal();
     const theme = puzzleThemeSearch ? puzzleThemeSearch.value.trim() : "";
     await loadPuzzle(theme || null);
+    return;
+  }
+
+  if (modeDraft.mode === "multiplayer") {
+    closeModeModal();
+    await startMultiplayer(modeDraft.minutes || 3);
     return;
   }
 
@@ -998,9 +1168,327 @@ colorChoicesWrap.addEventListener("click", (event) => {
   modeDraft.color = pill.dataset.color;
   syncModeUI();
 });
+if (timeChoicesWrap) {
+  timeChoicesWrap.addEventListener("click", (event) => {
+    const pill = event.target.closest(".pill");
+    if (!pill) return;
+    modeDraft.minutes = Number(pill.dataset.minutes) || 3;
+    syncModeUI();
+  });
+}
 modeStart.addEventListener("click", startSelectedMode);
 modeCancel.addEventListener("click", closeModeModal);
 modeButton.addEventListener("click", () => openModeModal({ allowCancel: true }));
+
+// ----- Multiplayer (WebSocket) -----
+
+function decorateMultiplayerState(state) {
+  if (!state) return state;
+  const session = {
+    mode: "multiplayer",
+    roomId: mpInfo ? mpInfo.roomId : null,
+    timeControl: mpInfo ? mpInfo.timeControl : null,
+  };
+  return { ...state, session, canUndo: false };
+}
+
+async function loadMultiplayerConfig() {
+  if (mpConfig) return mpConfig;
+  try {
+    const response = await fetch("/api/mp_config");
+    const data = await response.json();
+    if (data && data.ok) {
+      mpConfig = data;
+      return data;
+    }
+  } catch {
+    // ignore
+  }
+  mpConfig = { wsUrl: null, baseMinutes: [3, 5, 10], incrementSec: 2 };
+  return mpConfig;
+}
+
+function deriveMultiplayerWsUrl() {
+  const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+  const host = window.location.hostname;
+  const port = "8000";
+  return `${scheme}://${host}:${port}/ws`;
+}
+
+async function ensureMultiplayerSocket() {
+  if (mpSocket && (mpSocket.readyState === WebSocket.OPEN || mpSocket.readyState === WebSocket.CONNECTING)) {
+    return mpAuthPromise;
+  }
+
+  const config = await loadMultiplayerConfig();
+  const wsUrl = config.wsUrl || deriveMultiplayerWsUrl();
+
+  mpAuthPromise = new Promise((resolve) => {
+    mpAuthResolve = resolve;
+  });
+
+  mpSocket = new WebSocket(wsUrl);
+  mpSocket.addEventListener("open", () => {
+    mpSocket.send(JSON.stringify({ type: "auth", token: authToken }));
+  });
+  mpSocket.addEventListener("message", handleMultiplayerMessage);
+  mpSocket.addEventListener("close", () => {
+    mpStatus = "idle";
+    mpInfo = null;
+    mpClock = null;
+    showMultiplayerOverlay(false);
+  });
+  mpSocket.addEventListener("error", () => {
+    setMessage("Multiplayer: conexiune esuata.");
+  });
+
+  return mpAuthPromise;
+}
+
+function showMultiplayerOverlay(visible, text) {
+  if (!mpOverlay) return;
+  mpOverlay.hidden = !visible;
+  if (mpOverlayText && text) {
+    mpOverlayText.textContent = text;
+  }
+  if (!visible) {
+    stopQueueTimer();
+  }
+}
+
+function startQueueTimer() {
+  if (!mpOverlayWait) return;
+  stopQueueTimer();
+  mpQueueSince = Date.now();
+  mpOverlayWait.textContent = "Timp in asteptare: 0:00";
+  mpQueueTimer = setInterval(() => {
+    if (!mpQueueSince) return;
+    const elapsed = Math.max(0, Math.floor((Date.now() - mpQueueSince) / 1000));
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = String(elapsed % 60).padStart(2, "0");
+    mpOverlayWait.textContent = `Timp in asteptare: ${minutes}:${seconds}`;
+  }, 1000);
+}
+
+function stopQueueTimer() {
+  if (mpQueueTimer) {
+    clearInterval(mpQueueTimer);
+    mpQueueTimer = null;
+  }
+  mpQueueSince = null;
+}
+
+async function startMultiplayer(minutes) {
+  if (!authToken) {
+    showAuthModal();
+    return;
+  }
+
+  if (mpStatus === "queue" || mpStatus === "active") {
+    await leaveMultiplayer({ resign: mpStatus === "active", silent: true });
+  }
+
+  try {
+    const response = await fetch("/api/new_game", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "multiplayer" }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data.error || "Nu pot porni multiplayer.");
+    }
+    if (data.state) {
+      applyState(decorateMultiplayerState(data.state));
+    }
+  } catch (err) {
+    setMessage(err.message || "Nu pot porni multiplayer.");
+    return;
+  }
+
+  mpStatus = "queue";
+  showMultiplayerOverlay(true, "Conectare la server...");
+
+  await ensureMultiplayerSocket();
+  try {
+    await Promise.race([
+      mpAuthPromise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error("Auth timeout")), 5000)),
+    ]);
+  } catch (err) {
+    await leaveMultiplayer({ silent: true, resetSession: true });
+    await loadLocalState({ openMode: true });
+    setMessage("Multiplayer: autentificare esuata.");
+    return;
+  }
+
+  showMultiplayerOverlay(true, "Cautam adversar...");
+  mpSocket.send(JSON.stringify({ type: "join_queue", minutes }));
+}
+
+async function leaveMultiplayer({ resign = false, silent = false, resetSession = false } = {}) {
+  if (mpSocket && mpSocket.readyState === WebSocket.OPEN) {
+    if (mpStatus === "queue") {
+      mpSocket.send(JSON.stringify({ type: "cancel_queue" }));
+    }
+    if (mpStatus === "active" && resign) {
+      mpSocket.send(JSON.stringify({ type: "resign" }));
+    }
+  }
+  mpStatus = "idle";
+  mpInfo = null;
+  mpClock = null;
+  mpPendingMoves = null;
+  showMultiplayerOverlay(false);
+  renderMultiplayerClock(lastState);
+  if (resetSession) {
+    try {
+      await fetch("/api/new_game", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "local" }),
+      });
+    } catch {
+      // ignore
+    }
+  }
+  if (!silent) {
+    setMessage("Ai iesit din multiplayer.", "info");
+  }
+}
+
+function handleMultiplayerMessage(event) {
+  let msg = null;
+  try {
+    msg = JSON.parse(event.data);
+  } catch {
+    return;
+  }
+
+  switch (msg.type) {
+    case "auth_ok":
+      if (mpAuthResolve) mpAuthResolve(msg.user);
+      return;
+    case "queued":
+      mpStatus = "queue";
+      showMultiplayerOverlay(true, "Cautam adversar...");
+      startQueueTimer();
+      return;
+    case "queue_canceled":
+      mpStatus = "idle";
+      showMultiplayerOverlay(false);
+      stopQueueTimer();
+      return;
+    case "match_found":
+      mpStatus = "active";
+      mpInfo = {
+        roomId: msg.roomId,
+        color: msg.color,
+        opponent: msg.opponent,
+        timeControl: msg.timeControl,
+      };
+      mpClock = msg.clock || mpClock;
+      showMultiplayerOverlay(false);
+      stopQueueTimer();
+      if (msg.state) {
+        applyState(decorateMultiplayerState(msg.state));
+      }
+      return;
+    case "reconnected":
+      mpStatus = "active";
+      mpInfo = {
+        roomId: msg.roomId,
+        color: msg.color,
+        opponent: msg.opponent,
+        timeControl: msg.timeControl || (mpInfo ? mpInfo.timeControl : null),
+      };
+      mpClock = msg.clock || mpClock;
+      showMultiplayerOverlay(false);
+      if (msg.state) {
+        applyState(decorateMultiplayerState(msg.state));
+      }
+      return;
+    case "state":
+      if (msg.clock) mpClock = msg.clock;
+      if (msg.state) {
+        applyState(decorateMultiplayerState(msg.state));
+      }
+      return;
+    case "clock":
+      mpClock = msg.clock || mpClock;
+      renderMultiplayerClock(lastState);
+      return;
+    case "moves":
+      if (mpPendingMoves && mpPendingMoves.square === msg.from) {
+        mpPendingMoves.resolve({ moves: msg.moves || [], state: decorateMultiplayerState(msg.state) });
+        mpPendingMoves = null;
+      }
+      return;
+    case "game_over":
+      mpStatus = "idle";
+      showMultiplayerOverlay(false);
+      stopQueueTimer();
+      if (msg.clock) mpClock = msg.clock;
+      if (msg.state) {
+        applyState(decorateMultiplayerState(msg.state));
+      }
+      return;
+    case "opponent_left":
+      setMessage("Adversarul s-a deconectat.", "info");
+      return;
+    case "opponent_back":
+      setMessage("");
+      return;
+    case "error":
+      setMessage(msg.message || "Eroare multiplayer.");
+      interactionLocked = false;
+      if (mpPendingMoves) {
+        mpPendingMoves.reject(new Error(msg.message || "Eroare la mutari."));
+        mpPendingMoves = null;
+      }
+      return;
+    default:
+      return;
+  }
+}
+
+async function requestMultiplayerMoves(square) {
+  if (!mpSocket || mpSocket.readyState !== WebSocket.OPEN) {
+    throw new Error("Conexiune multiplayer indisponibila.");
+  }
+  if (mpPendingMoves) {
+    throw new Error("Asteapta raspunsul anterior.");
+  }
+  return new Promise((resolve, reject) => {
+    mpPendingMoves = { square, resolve, reject };
+    mpSocket.send(JSON.stringify({ type: "moves", from: square }));
+    setTimeout(() => {
+      if (mpPendingMoves && mpPendingMoves.square === square) {
+        mpPendingMoves = null;
+        reject(new Error("Timeout la mutari."));
+      }
+    }, 3000);
+  });
+}
+
+async function sendMultiplayerMove(origin, target, promotion) {
+  if (!mpSocket || mpSocket.readyState !== WebSocket.OPEN) {
+    throw new Error("Conexiune multiplayer indisponibila.");
+  }
+  mpSocket.send(JSON.stringify({
+    type: "move",
+    from: origin,
+    to: target,
+    promotion,
+  }));
+}
+
+if (mpOverlayCancel) {
+  mpOverlayCancel.addEventListener("click", async () => {
+    await leaveMultiplayer({ resign: mpStatus === "active", resetSession: true });
+    await loadLocalState({ openMode: true });
+  });
+}
 
 // ----- Auth -----
 
@@ -1079,6 +1567,7 @@ async function performLogin(e) {
     hideAuthModal();
     updateUserChip();
     await loadInitialState();
+    await loadMultiplayerConfig();
   } catch (err) {
     authErrorEl.textContent = err.message;
   } finally {
@@ -1119,6 +1608,7 @@ async function performRegister(e) {
     hideAuthModal();
     updateUserChip();
     await loadInitialState();
+    await loadMultiplayerConfig();
   } catch (err) {
     authErrorEl.textContent = err.message;
   } finally {
@@ -1127,6 +1617,11 @@ async function performRegister(e) {
 }
 
 function performLogout() {
+  leaveMultiplayer({ resign: false, silent: true });
+  if (mpSocket) {
+    mpSocket.close();
+    mpSocket = null;
+  }
   authToken = null;
   currentUser = null;
   localStorage.removeItem(TOKEN_KEY);
@@ -1154,6 +1649,7 @@ async function checkAuthAndLoad() {
     hideAuthModal();
     updateUserChip();
     await loadInitialState();
+    await loadMultiplayerConfig();
   } catch {
     authToken = null;
     localStorage.removeItem(TOKEN_KEY);
@@ -1172,13 +1668,17 @@ logoutBtn.addEventListener('click', performLogout);
 
 async function loadInitialState() {
   buildBoardScaffold();
+  await loadLocalState({ openMode: true, allowCancel: false });
+}
+
+async function loadLocalState({ openMode = false, allowCancel = true } = {}) {
   try {
     const response = await fetch("/api/state");
     const state = await response.json();
     applyState(state);
-    // Always show the mode selector on first load so the user picks.
-    // No "Back" — first load must end with a chosen mode.
-    openModeModal({ allowCancel: false });
+    if (openMode) {
+      openModeModal({ allowCancel });
+    }
   } catch (err) {
     setMessage("Nu pot incarca starea: " + err.message);
   }
