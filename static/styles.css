@@ -863,6 +863,132 @@ button:disabled {
   border-color: var(--accent);
 }
 
+/* ----------------------------- Auth Modal -------------------------------- */
+
+.auth-modal {
+  max-width: 360px;
+  text-align: left;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.auth-logo {
+  width: 52px;
+  height: 52px;
+  font-size: 32px;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.auth-tab {
+  background: var(--panel);
+  color: var(--ink-soft);
+  border: 0;
+  padding: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: background var(--transition), color var(--transition);
+}
+
+.auth-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.auth-error {
+  min-height: 1.4em;
+  margin: 0 0 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--danger);
+  text-align: center;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.form-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.form-input {
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 10px 12px;
+  outline: none;
+  width: 100%;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.form-input::placeholder { color: var(--ink-muted); }
+
+.auth-submit {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 11px;
+}
+
+/* --------------------- User chip in topbar ------------------------------ */
+
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+
+.user-dot {
+  color: var(--accent);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+#user-name {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.user-rating {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 /* ----------------------------- Mobile ------------------------------- */
 
 @media (max-width: 560px) {

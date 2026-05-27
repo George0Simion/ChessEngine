@@ -8,6 +8,9 @@ from flask import Flask, jsonify, request, send_from_directory
 
 from chessmate import ChessGame, InvalidMoveError, build_engine
 from chessmate.engine import Engine
+from models import db, User, Rating, Game
+from flask_migrate import Migrate
+from auth import auth_bp
 
 
 MODE_LOCAL = "local"      # 1v1 hot-seat
@@ -37,6 +40,27 @@ class GameSession:
 
 def create_app() -> Flask:
     app = Flask(__name__, static_folder="static", static_url_path="/static")
+
+    # ------------------------------------------------------------------ Config
+    db_url = os.environ.get("DATABASE_URL", "sqlite:///chessmate.db")
+    # Heroku/Render use postgres:// but SQLAlchemy 1.4+ needs postgresql://
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SECRET_KEY"] = os.environ.get(
+        "SECRET_KEY", "dev-secret-change-in-production"
+    )
+
+    db.init_app(app)
+    Migrate(app, db)
+    app.register_blueprint(auth_bp)
+
+    # Auto-create tables in development (migrations handle production)
+    with app.app_context():
+        db.create_all()
+
     session = GameSession(game=ChessGame())
 
     # ------------------------------------------------------------------

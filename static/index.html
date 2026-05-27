@@ -17,6 +17,16 @@
           </div>
         </div>
         <div class="topbar-actions">
+          <!-- User info (hidden until logged in) -->
+          <span class="user-chip" id="user-chip" hidden>
+            <span class="user-dot" aria-hidden="true">&#9829;</span>
+            <span id="user-name"></span>
+            <span class="user-rating" id="user-rating"></span>
+          </span>
+          <button id="logout-button" type="button" class="ghost" title="Deconectare" hidden>
+            <span class="btn-icon" aria-hidden="true">&#10230;</span>
+            <span class="btn-label">Ieșire</span>
+          </button>
           <button id="mode-button" type="button" class="ghost" title="Schimba modul de joc">
             <span class="btn-icon" aria-hidden="true">&#9881;</span>
             <span class="btn-label" id="mode-button-label">1v1 Local</span>
@@ -146,6 +156,48 @@
           <button type="button" class="ghost" id="endgame-close">Vezi tabla</button>
           <button type="button" class="primary" id="endgame-reset">Joc nou</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Auth modal (shown on first load; hidden after login) -->
+    <div class="modal-backdrop" id="auth-modal">
+      <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+        <div class="auth-header">
+          <span class="brand-mark auth-logo" aria-hidden="true">&#9818;</span>
+          <h3 id="auth-title">ChessMate</h3>
+          <p class="modal-text">Conectează-te sau creează un cont nou.</p>
+        </div>
+
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" id="auth-tab-login">Conectare</button>
+          <button type="button" class="auth-tab" id="auth-tab-register">Cont nou</button>
+        </div>
+
+        <p class="auth-error" id="auth-error" aria-live="polite"></p>
+
+        <form id="auth-login-form">
+          <div class="form-group">
+            <label class="form-label" for="login-username">Utilizator</label>
+            <input class="form-input" type="text" id="login-username" placeholder="username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="login-password">Parolă</label>
+            <input class="form-input" type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+          </div>
+          <button type="submit" class="primary auth-submit" id="login-submit">Conectează-te</button>
+        </form>
+
+        <form id="auth-register-form" hidden>
+          <div class="form-group">
+            <label class="form-label" for="register-username">Utilizator</label>
+            <input class="form-input" type="text" id="register-username" placeholder="alege un username" autocomplete="username">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="register-password">Parolă</label>
+            <input class="form-input" type="password" id="register-password" placeholder="min. 6 caractere" autocomplete="new-password">
+          </div>
+          <button type="submit" class="primary auth-submit" id="register-submit">Creează cont</button>
+        </form>
       </div>
     </div>
 

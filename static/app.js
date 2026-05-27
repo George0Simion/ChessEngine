@@ -803,6 +803,172 @@ modeStart.addEventListener("click", startSelectedMode);
 modeCancel.addEventListener("click", closeModeModal);
 modeButton.addEventListener("click", () => openModeModal({ allowCancel: true }));
 
+// ----- Auth -----
+
+const TOKEN_KEY = 'chessmate_token';
+let authToken = localStorage.getItem(TOKEN_KEY);
+let currentUser = null;
+
+const authModalEl    = document.querySelector('#auth-modal');
+const authTabLogin   = document.querySelector('#auth-tab-login');
+const authTabReg     = document.querySelector('#auth-tab-register');
+const authLoginForm  = document.querySelector('#auth-login-form');
+const authRegForm    = document.querySelector('#auth-register-form');
+const authErrorEl    = document.querySelector('#auth-error');
+const loginUserEl    = document.querySelector('#login-username');
+const loginPassEl    = document.querySelector('#login-password');
+const loginSubmitEl  = document.querySelector('#login-submit');
+const regUserEl      = document.querySelector('#register-username');
+const regPassEl      = document.querySelector('#register-password');
+const regSubmitEl    = document.querySelector('#register-submit');
+const userChipEl     = document.querySelector('#user-chip');
+const userNameEl     = document.querySelector('#user-name');
+const userRatingEl   = document.querySelector('#user-rating');
+const logoutBtn      = document.querySelector('#logout-button');
+
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  authTabLogin.classList.toggle('active', isLogin);
+  authTabReg.classList.toggle('active', !isLogin);
+  authLoginForm.hidden = !isLogin;
+  authRegForm.hidden = isLogin;
+  authErrorEl.textContent = '';
+}
+
+function showAuthModal() {
+  authErrorEl.textContent = '';
+  authModalEl.hidden = false;
+}
+
+function hideAuthModal() {
+  authModalEl.hidden = true;
+}
+
+function updateUserChip() {
+  if (!currentUser) {
+    userChipEl.hidden = true;
+    logoutBtn.hidden = true;
+    return;
+  }
+  userChipEl.hidden = false;
+  logoutBtn.hidden = false;
+  userNameEl.textContent = currentUser.username;
+  userRatingEl.textContent = currentUser.rating ? `★ ${currentUser.rating}` : '';
+}
+
+async function performLogin(e) {
+  e.preventDefault();
+  const username = loginUserEl.value.trim();
+  const password = loginPassEl.value;
+  if (!username || !password) {
+    authErrorEl.textContent = 'Completeaza toate câmpurile.';
+    return;
+  }
+  loginSubmitEl.disabled = true;
+  authErrorEl.textContent = '';
+  try {
+    const res  = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Autentificare eșuată.');
+    authToken = data.token;
+    localStorage.setItem(TOKEN_KEY, authToken);
+    currentUser = { username: data.username };
+    hideAuthModal();
+    updateUserChip();
+    await loadInitialState();
+  } catch (err) {
+    authErrorEl.textContent = err.message;
+  } finally {
+    loginSubmitEl.disabled = false;
+  }
+}
+
+async function performRegister(e) {
+  e.preventDefault();
+  const username = regUserEl.value.trim();
+  const password = regPassEl.value;
+  if (!username || !password) {
+    authErrorEl.textContent = 'Completeaza toate câmpurile.';
+    return;
+  }
+  regSubmitEl.disabled = true;
+  authErrorEl.textContent = '';
+  try {
+    // Register
+    const regRes  = await fetch('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const regData = await regRes.json();
+    if (!regData.ok) throw new Error(regData.error || 'Înregistrare eșuată.');
+    // Auto-login after register
+    const loginRes  = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const loginData = await loginRes.json();
+    if (!loginData.ok) throw new Error('Cont creat! Conectează-te manual.');
+    authToken = loginData.token;
+    localStorage.setItem(TOKEN_KEY, authToken);
+    currentUser = { username: loginData.username };
+    hideAuthModal();
+    updateUserChip();
+    await loadInitialState();
+  } catch (err) {
+    authErrorEl.textContent = err.message;
+  } finally {
+    regSubmitEl.disabled = false;
+  }
+}
+
+function performLogout() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem(TOKEN_KEY);
+  updateUserChip();
+  loginUserEl.value = '';
+  loginPassEl.value = '';
+  regUserEl.value = '';
+  regPassEl.value = '';
+  switchAuthTab('login');
+  showAuthModal();
+}
+
+async function checkAuthAndLoad() {
+  if (!authToken) {
+    showAuthModal();
+    return;
+  }
+  try {
+    const res  = await fetch('/auth/me', {
+      headers: { 'Authorization': `Bearer ${authToken}` },
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error('Token invalid');
+    currentUser = { username: data.user.username, rating: data.user.rating };
+    hideAuthModal();
+    updateUserChip();
+    await loadInitialState();
+  } catch {
+    authToken = null;
+    localStorage.removeItem(TOKEN_KEY);
+    showAuthModal();
+  }
+}
+
+// Wire auth events
+authTabLogin.addEventListener('click', () => switchAuthTab('login'));
+authTabReg.addEventListener('click', () => switchAuthTab('register'));
+authLoginForm.addEventListener('submit', performLogin);
+authRegForm.addEventListener('submit', performRegister);
+logoutBtn.addEventListener('click', performLogout);
+
 // ----- Initial load -----
 
 async function loadInitialState() {
@@ -827,4 +993,4 @@ resetButton.addEventListener("click", performReset);
 endgameClose.addEventListener("click", () => { endgameModal.hidden = true; });
 endgameReset.addEventListener("click", () => { endgameModal.hidden = true; performReset(); });
 
-loadInitialState();
+checkAuthAndLoad();
