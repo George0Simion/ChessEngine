@@ -254,6 +254,41 @@ class ChessGame:
         self._cached_status = None
         self._bump_position_count()
 
+    def to_fen(self) -> str:
+        """Export the current position as a FEN string."""
+        _FEN_LETTER = {
+            (WHITE, PAWN): "P", (WHITE, KNIGHT): "N", (WHITE, BISHOP): "B",
+            (WHITE, ROOK): "R", (WHITE, QUEEN): "Q", (WHITE, KING): "K",
+            (BLACK, PAWN): "p", (BLACK, KNIGHT): "n", (BLACK, BISHOP): "b",
+            (BLACK, ROOK): "r", (BLACK, QUEEN): "q", (BLACK, KING): "k",
+        }
+        rows = []
+        for rank in "87654321":
+            empty = 0
+            row = ""
+            for file in "abcdefgh":
+                pc = self.board.get(file + rank)
+                if pc is None:
+                    empty += 1
+                else:
+                    if empty:
+                        row += str(empty)
+                        empty = 0
+                    row += _FEN_LETTER[(pc.color, pc.kind)]
+            if empty:
+                row += str(empty)
+            rows.append(row)
+        side = "w" if self.turn == WHITE else "b"
+        castling = (
+            ("K" if self.castling_rights[WHITE]["K"] else "")
+            + ("Q" if self.castling_rights[WHITE]["Q"] else "")
+            + ("k" if self.castling_rights[BLACK]["K"] else "")
+            + ("q" if self.castling_rights[BLACK]["Q"] else "")
+        ) or "-"
+        ep = self.en_passant_target or "-"
+        fullmove = (len(self.history) // 2) + 1
+        return f"{'/'.join(rows)} {side} {castling} {ep} {self.halfmove_clock} {fullmove}"
+
     def state(self) -> dict[str, object]:
         status, winner, in_check = self._current_status()
 

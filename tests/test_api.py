@@ -163,7 +163,7 @@ class ApiTest(unittest.TestCase):
         session = payload["state"]["session"]
         self.assertEqual("vs_bot", session["mode"])
         self.assertEqual("black", session["botColor"])
-        self.assertEqual("mcts", session["engine"])
+        self.assertEqual("alphabeta", session["engine"])
 
     def test_new_game_rejects_unknown_mode(self):
         response = self.client.post("/api/new_game", json={"mode": "battle_royale"})

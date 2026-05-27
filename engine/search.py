@@ -261,6 +261,13 @@ class Searcher:
                 if alpha >= beta:
                     return tt_score
 
+        # ---- Reverse futility pruning (static null-move) ----
+        is_pv = (beta - alpha > 1)
+        if (not is_pv and not in_check and depth <= 6):
+            static_eval = evaluate(pos)
+            if static_eval - 80 * depth >= beta:
+                return static_eval
+
         # ---- Null-move pruning ----
         if (allow_null and not in_check and depth >= 3
                 and self._has_non_pawn_material()):
@@ -289,10 +296,18 @@ class Searcher:
         best_score = -INF
         best_move = NO_MOVE
 
+        futility_margins = [0, 150, 300]
+
         for i, m in enumerate(moves):
             flag = move_flag(m)
             is_tactical = (flag == F_CAPTURE or flag == F_EP_CAPTURE
                             or flag == F_PROMO or flag == F_PROMO_CAPTURE)
+
+            # ---- Futility pruning ----
+            if (not is_pv and not in_check and not is_tactical
+                    and depth <= 2 and i > 0):
+                if static_eval + futility_margins[depth] <= alpha:
+                    continue
 
             pos.make_move(m)
             self.nodes += 1

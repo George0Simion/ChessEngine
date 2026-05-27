@@ -6,13 +6,13 @@ from typing import Optional
 
 from flask import Flask, jsonify, request, send_from_directory
 
-from chessmate import ChessGame, InvalidMoveError, build_engine
-from chessmate.engine import Engine
+from chessmate import ChessGame, InvalidMoveError
 from chessmate.puzzle import PuzzleLoader, PuzzleSession
 from models import db, User, Rating, Game
 from flask_migrate import Migrate
 from auth import auth_bp
 from backend.games import games_bp
+from engine import api as engine_api
 
 
 MODE_LOCAL = "local"      # 1v1 hot-seat
@@ -37,8 +37,8 @@ class GameSession:
     game: ChessGame
     mode: str = MODE_LOCAL
     bot_color: Optional[str] = None      # "white" / "black" / None
-    engine_name: str = "mcts"
-    engine: Optional[Engine] = None
+    engine_name: str = "alphabeta"
+    bot_level: int = 3
 
     def mode_info(self) -> dict:
         return {
@@ -78,7 +78,7 @@ def create_app() -> Flask:
         db.create_all()
         _ensure_games_schema()
 
-    session = GameSession(game=ChessGame())
+    session = GameSession(game=ChessGame(), engine_name="alphabeta")
 
     # Puzzle state — lazy-loaded on first puzzle request.
     puzzle_loader: Optional[PuzzleLoader] = None
@@ -232,7 +232,7 @@ def create_app() -> Flask:
 
     @app.post("/api/bot_move")
     def bot_move():
-        if session.mode != MODE_VS_BOT or session.engine is None:
+        if session.mode != MODE_VS_BOT:
             return jsonify({
                 "ok": False,
                 "error": "Modul curent nu are bot activ.",
@@ -255,7 +255,14 @@ def create_app() -> Flask:
             }), 400
 
         try:
-            origin, target, promotion = session.engine.choose_move(session.game)
+            fen = session.game.to_fen()
+            result = engine_api.best_move(fen, level=session.bot_level)
+            uci = result.get("move")
+            if not uci:
+                raise RuntimeError("Motorul nu a returnat nicio mutare.")
+            origin = uci[:2]
+            target = uci[2:4]
+            promotion = result.get("promotion")
             next_state = session.game.move(origin, target, promotion=promotion)
             next_state["session"] = session.mode_info()
             return jsonify({
@@ -283,8 +290,6 @@ def create_app() -> Flask:
             "mode": "local" | "vs_bot",
             "botColor": "white" | "black"      (only for vs_bot)
           }
-
-        The engine is always MCTS; it is not selectable from the client.
         """
         payload = request.get_json(silent=True) or {}
         mode = (payload.get("mode") or MODE_LOCAL).strip().lower()
@@ -299,30 +304,20 @@ def create_app() -> Flask:
                     "ok": False,
                     "error": "botColor trebuie sa fie 'white' sau 'black'.",
                 }), 400
-            # Optional difficulty dial (1..4); affects only MCTS budget.
             level_raw = payload.get("level", 3)
             try:
                 level = max(1, min(4, int(level_raw)))
             except (TypeError, ValueError):
                 level = 3
-            level_to_mcts = {
-                1: {"simulations":  20, "time_budget": 0.2},
-                2: {"simulations":  80, "time_budget": 0.6},
-                3: {"simulations": 200, "time_budget": 1.5},
-                4: {"simulations": 600, "time_budget": 4.0},
-            }
-            session.engine = build_engine("mcts", **level_to_mcts[level])
-        elif mode == MODE_MULTIPLAYER:
-            session.engine = None
-            bot_color = None
+            session.bot_level = level
         else:
-            session.engine = None
             bot_color = None
+            session.bot_level = 3
 
         session.game.reset()
         session.mode = mode
         session.bot_color = bot_color
-        session.engine_name = "mcts"
+        session.engine_name = "alphabeta"
 
         return jsonify({"ok": True, "state": _state_with_session(session)})
 
