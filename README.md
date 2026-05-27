@@ -112,6 +112,91 @@ Testele care depind de Flask se sar automat daca Flask nu este instalat.
 - `POST /api/undo` — anuleaza ultima mutare (doua semimutari in `vs_bot`).
 - `POST /api/reset` — reseteaza tabla, pastrand modul curent.
 
+## In-house engine (`engine/`)
+
+A second, stronger engine lives in `engine/`, written from scratch (no external
+chess libraries) as a classical alpha-beta core. It is independent of the
+existing `chessmate/` MCTS engine and can be used directly or wired into the
+Flask layer.
+
+Features:
+
+- negamax + alpha-beta with iterative deepening
+- transposition table (Zobrist hashing)
+- quiescence search (captures + promotions)
+- move ordering: TT move → MVV-LVA captures → killers → history
+- null-move pruning + check extensions + PVS-lite
+- handcrafted eval: material, PST (tapered MG/EG king), mobility, bishop pair,
+  doubled/isolated/passed pawns, rook on open/semi-open file, king pawn-shield
+  and attacker count, tempo
+- legal: castling, en passant, promotion, 50-move rule, threefold repetition,
+  insufficient material
+- 3 difficulty levels exposed by `best_move(..., level=1|2|3|4)` that scale
+  the search budget and randomness — never the rules
+
+### Python API
+
+```python
+from engine import best_move, analyze_position
+
+best_move("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+          time_ms=1000, level=3)
+# {'move': 'e2e4', 'from': 'e2', 'to': 'e4', 'promotion': None,
+#  'score_cp': 32, 'mate': None, 'depth': 7, 'nodes': 12345,
+#  'time_ms': 998, 'pv': ['e2e4', 'e7e5', ...], 'source': 'search'}
+
+analyze_position(fen, depth=8)
+```
+
+### UCI-like CLI
+
+```bash
+python -m engine.uci
+```
+
+Supports `uci`, `isready`, `ucinewgame`, `position startpos [moves ...]`,
+`position fen ... moves ...`, `go movetime N | depth N | wtime/btime/winc/binc`,
+`stop`, `quit`, plus `d` (print board) and `eval`.
+
+## Data tools (`tools/`)
+
+Offline scripts to extract value from the Kaggle `lichess-08-2014.csv` CSV.
+They may use `python-chess` (only here) for robust PGN/SAN parsing.
+
+```bash
+# 1) Normalize the Kaggle CSV into JSONL (one game per line).
+python -m tools.parse_kaggle_games \
+    --in lichess-08-2014.csv --out data/games.jsonl \
+    --min-rating 1600
+
+# 2) Build an opening book keyed by our engine's Zobrist hash.
+python -m tools.build_opening_book \
+    --in data/games.jsonl --out data/opening_book.json \
+    --max-ply 16 --min-rating 1700 --min-freq 3 --top-k 6
+# The engine auto-loads data/opening_book.json on first probe.
+
+# 3) Label every move with Best / Excellent / Good / Inaccuracy / Mistake / Blunder
+python -m tools.label_moves \
+    --in data/games.jsonl --out data/labeled.jsonl \
+    --time-ms 80 --max-games 500
+
+# 4) Mine puzzle candidates from blunders.
+python -m tools.extract_puzzles \
+    --labeled data/labeled.jsonl --games data/games.jsonl \
+    --out data/puzzles.jsonl --min-swing 250 --solution-plies 4
+
+# 5) Train a tiny supervised policy net (optional).
+python -m tools.train_policy_small \
+    --in data/games.jsonl --out models/policy.pt \
+    --epochs 2 --batch 128 --max-positions 200000
+```
+
+The opening book and tiny policy model are optional enhancements — the engine
+runs without either. Move-labeling thresholds (in centipawns vs the engine's
+best move): Best ≤ 20, Excellent 21–50, Good 51–100, Inaccuracy 101–250,
+Mistake 251–500, Blunder > 500 (or mate-swings). cp values are capped before
+labeling to avoid spurious "Blunder" tags in already-won positions.
+
 ## Structura
 
 ```

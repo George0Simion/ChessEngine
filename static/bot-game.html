@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessMate &mdash; Contra Bot</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <style>
+      /* ---- Setup screen ---- */
+      .setup-screen {
+        display: flex;
+        justify-content: center;
+        padding: 48px 16px;
+      }
+      .setup-card {
+        background: var(--panel-elevated);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        padding: 36px 32px;
+        max-width: 480px;
+        width: 100%;
+        box-shadow: var(--shadow-lg);
+        animation: pop-in 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+      }
+      .setup-card h2 {
+        margin: 0 0 6px;
+        font-size: 1.5rem;
+        text-align: center;
+      }
+      .setup-card > .modal-text { text-align: center; margin-bottom: 24px; }
+      .setup-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 12px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        margin-bottom: 10px;
+      }
+      .setup-row h4 {
+        margin: 0;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        min-width: 72px;
+        flex-shrink: 0;
+      }
+      .setup-error {
+        min-height: 1.4em;
+        margin: 8px 0 4px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--danger);
+        text-align: center;
+      }
+      .setup-start {
+        width: 100%;
+        justify-content: center;
+        padding: 12px;
+        font-size: 1rem;
+        margin-top: 6px;
+      }
+
+      /* ---- Game info in sidebar ---- */
+      .moves-wrap {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+      .moves-wrap .moves-list {
+        overflow-y: visible;
+      }
+      .game-info {
+        padding: 12px 18px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        flex-shrink: 0;
+      }
+      .game-info-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.85rem;
+      }
+      .game-info-label { color: var(--ink-muted); font-weight: 500; }
+      .game-info-value { color: var(--ink); font-weight: 700; }
+      .game-info-value.win  { color: var(--success); }
+      .game-info-value.loss { color: var(--danger); }
+
+      /* ---- Danger button ---- */
+      button.ghost.danger {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      button.ghost.danger:hover:not(:disabled) {
+        background: rgba(217, 106, 106, 0.15);
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+
+      /* ---- Bot level badge ---- */
+      .bot-level-badge {
+        background: var(--accent-soft);
+        color: var(--accent);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        margin-left: 4px;
+      }
+    </style>
+  </head>
+  <body data-theme="dark">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <span class="brand-mark" aria-hidden="true">&#9818;</span>
+          <div class="brand-text">
+            <p class="eyebrow">ChessMate</p>
+            <h1>Contra <span class="vs">Bot</span></h1>
+          </div>
+        </div>
+        <div class="topbar-actions">
+          <span class="user-chip" id="user-chip" hidden>
+            <span class="user-dot" aria-hidden="true">&#9829;</span>
+            <span id="user-name"></span>
+          </span>
+          <button type="button" class="ghost" onclick="location.href='/'" title="Înapoi la meniu">
+            <span class="btn-icon" aria-hidden="true">&#8592;</span>
+            <span class="btn-label">Acas&#259;</span>
+          </button>
+          <button id="resign-button" type="button" class="ghost danger" title="Abandonează jocul" hidden>
+            <span class="btn-icon" aria-hidden="true">&#9873;</span>
+            <span class="btn-label">Abandon</span>
+          </button>
+          <button id="flip-button" type="button" class="ghost" title="Rotește tabla">
+            <span class="btn-icon" aria-hidden="true">&#8645;</span>
+            <span class="btn-label">Flip</span>
+          </button>
+          <button id="new-game-button" type="button" class="primary" title="Joc nou">
+            <span class="btn-icon" aria-hidden="true">&#8635;</span>
+            <span class="btn-label">Joc nou</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Setup screen: shown when no active game -->
+      <div id="setup-screen" class="setup-screen" hidden>
+        <div class="setup-card">
+          <h2>&#129302; Joacă contra bot</h2>
+          <p class="modal-text">Configurează jocul și apasă Start.</p>
+
+          <div class="setup-row">
+            <h4>Culoare</h4>
+            <div class="pill-choices" id="color-choices">
+              <button type="button" class="pill selected" data-color="white">Albe</button>
+              <button type="button" class="pill" data-color="black">Negre</button>
+              <button type="button" class="pill" data-color="random">Aleator</button>
+            </div>
+          </div>
+
+          <div class="setup-row">
+            <h4>Nivel bot</h4>
+            <div class="pill-choices" id="level-choices">
+              <button type="button" class="pill" data-level="1">1 &#9679; Ușor</button>
+              <button type="button" class="pill selected" data-level="2">2 &#9679; Mediu</button>
+              <button type="button" class="pill" data-level="3">3 &#9679; Avansat</button>
+              <button type="button" class="pill" data-level="4">4 &#9679; Expert</button>
+            </div>
+          </div>
+
+          <p class="setup-error" id="setup-error" aria-live="polite"></p>
+
+          <button type="button" class="primary setup-start" id="start-button">
+            <span class="btn-icon">&#9654;</span>
+            Start joc
+          </button>
+        </div>
+      </div>
+
+      <!-- Game screen: shown once a game is active/loaded -->
+      <div id="game-screen" class="layout" hidden>
+        <section class="play-area" aria-label="Tabla de sah">
+
+          <div class="player-card" id="player-top">
+            <div class="player-info">
+              <span class="player-dot" id="top-dot"></span>
+              <span class="player-name" id="top-name">BOT</span>
+              <span class="player-color" id="top-color">Negre</span>
+              <span class="bot-level-badge" id="top-badge" hidden></span>
+            </div>
+          </div>
+
+          <div id="board" class="board" aria-label="Tabla 8x8">
+            <div class="squares-layer" id="squares-layer"></div>
+            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
+            <div class="coords-files" id="coords-files"></div>
+            <div class="coords-ranks" id="coords-ranks"></div>
+            <div class="bot-thinking" id="bot-thinking" hidden>
+              <span class="spinner" aria-hidden="true"></span>
+              <span class="bot-thinking-text">Bot g&#226;nde&#351;te&#8230;</span>
+            </div>
+          </div>
+
+          <div class="player-card" id="player-bottom">
+            <div class="player-info">
+              <span class="player-dot" id="bottom-dot"></span>
+              <span class="player-name" id="bottom-name">Tu</span>
+              <span class="player-color" id="bottom-color">Albe</span>
+              <span class="bot-level-badge" id="bottom-badge" hidden></span>
+            </div>
+          </div>
+
+          <div class="status-bar" role="status" aria-live="polite">
+            <span class="turn-pill" id="turn-pill">
+              <span class="turn-dot"></span>
+              <span id="turn-text">Tura: Albe</span>
+            </span>
+            <span id="message" class="message"></span>
+          </div>
+
+        </section>
+
+        <aside class="side-panel" aria-label="Mutări și informații">
+          <div class="panel-header">
+            <h2>Mutări</h2>
+            <span class="badge" id="move-count">0</span>
+          </div>
+          <div class="moves-wrap">
+            <ol class="moves-list" id="moves-list"></ol>
+            <div class="panel-empty" id="moves-empty">
+              Nicio mutare &#238;nc&#259;.<br>
+              <span class="hint">Apas&#259; pe o pies&#259; pentru a &#238;ncepe.</span>
+            </div>
+          </div>
+          <div class="game-info" id="game-info">
+            <div class="game-info-row">
+              <span class="game-info-label">Nivel bot</span>
+              <span class="game-info-value" id="info-level">&#8212;</span>
+            </div>
+            <div class="game-info-row">
+              <span class="game-info-label">Culoarea ta</span>
+              <span class="game-info-value" id="info-color">&#8212;</span>
+            </div>
+            <div class="game-info-row">
+              <span class="game-info-label">Status</span>
+              <span class="game-info-value" id="info-status">&#8212;</span>
+            </div>
+            <div class="game-info-row" id="info-reason-row" hidden>
+              <span class="game-info-label">Motiv</span>
+              <span class="game-info-value" id="info-reason">&#8212;</span>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <!-- Auth gate: shown when no valid token -->
+    <div class="modal-backdrop" id="auth-modal" hidden>
+      <div class="modal auth-modal" role="dialog" aria-modal="true">
+        <div class="auth-header">
+          <span class="brand-mark auth-logo" aria-hidden="true">&#9818;</span>
+          <h3>ChessMate</h3>
+          <p class="modal-text">
+            Trebuie s&#259; fii autentificat pentru a juca contra bot.<br>
+            Conecteaz&#259;-te pe pagina principal&#259;.
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="primary" onclick="location.href='/'">
+            &#8592; Conectare
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Promotion modal -->
+    <div class="modal-backdrop" id="promo-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>Promovare pion</h3>
+        <p class="modal-text">Alege piesa.</p>
+        <div class="promo-choices" id="promo-choices"></div>
+      </div>
+    </div>
+
+    <!-- Game-over modal -->
+    <div class="modal-backdrop" id="endgame-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true">
+        <div class="endgame-icon" id="endgame-icon" aria-hidden="true">&#9812;</div>
+        <h3 id="endgame-title">Joc terminat</h3>
+        <p class="modal-text" id="endgame-text">Partida s-a terminat.</p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="endgame-close">Vezi tabla</button>
+          <button type="button" class="primary" id="endgame-new">Joc nou</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/games-api.js"></script>
+    <script src="/static/bot-game.js" defer></script>
+  </body>
+</html>

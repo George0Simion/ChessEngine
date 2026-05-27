@@ -12,6 +12,7 @@ from chessmate.puzzle import PuzzleLoader, PuzzleSession
 from models import db, User, Rating, Game
 from flask_migrate import Migrate
 from auth import auth_bp
+from backend.games import games_bp
 
 
 MODE_LOCAL = "local"      # 1v1 hot-seat
@@ -68,10 +69,14 @@ def create_app() -> Flask:
     db.init_app(app)
     Migrate(app, db)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(games_bp)
 
-    # Auto-create tables in development (migrations handle production)
+    # Auto-create tables in development (migrations handle production).
+    # Also opportunistically ALTER TABLE for new columns that may not exist
+    # in an older sqlite file from a previous schema version.
     with app.app_context():
         db.create_all()
+        _ensure_games_schema()
 
     session = GameSession(game=ChessGame())
 
@@ -95,6 +100,10 @@ def create_app() -> Flask:
     @app.get("/")
     def index():
         return send_from_directory(app.static_folder, "index.html")
+
+    @app.get("/bot")
+    def bot_game():
+        return send_from_directory(app.static_folder, "bot-game.html")
 
     # ------------------------------------------------------------------
     # State / moves
@@ -420,12 +429,51 @@ def _state_with_session(session: GameSession) -> dict:
     return payload
 
 
-def _puzzle_unavailable_msg() -> str:
-    return (
-        "Baza de date de puzzle-uri nu este disponibilă. "
-        "Descarcă fișierul CSV de pe Kaggle și setează "
-        "variabila de mediu PUZZLE_CSV_PATH cu calea către el."
-    )
+def _ensure_games_schema() -> None:
+    """Add any missing columns to the `games` table (idempotent).
+
+    `db.create_all()` only creates missing TABLES — it won't add missing
+    COLUMNS. When the schema evolves we ALTER TABLE here so an older sqlite
+    file from a previous build keeps working without manual migrations.
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(db.engine)
+    try:
+        existing = {c["name"] for c in inspector.get_columns("games")}
+    except Exception:
+        return  # table doesn't exist yet, create_all handled it
+
+    needed = [
+        ("white_is_bot",  "BOOLEAN NOT NULL DEFAULT 0"),
+        ("black_is_bot",  "BOOLEAN NOT NULL DEFAULT 0"),
+        ("bot_level",     "INTEGER"),
+        ("current_fen",   "TEXT"),
+        ("result_reason", "VARCHAR(40)"),
+        ("updated_at",    "DATETIME"),
+    ]
+    fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+    for col, sql_type in needed:
+        if col in existing:
+            continue
+        try:
+            db.session.execute(text(f"ALTER TABLE games ADD COLUMN {col} {sql_type}"))
+        except Exception:
+            db.session.rollback()
+            continue
+
+    # Backfill defaults for rows from older schemas.
+    try:
+        db.session.execute(text(
+            "UPDATE games SET current_fen = :fen WHERE current_fen IS NULL"
+        ), {"fen": fen_start})
+        db.session.execute(text(
+            "UPDATE games SET moves_history = '' WHERE moves_history IS NULL"
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 app = create_app()
