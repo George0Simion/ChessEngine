@@ -22,7 +22,9 @@ instance/
 *.sqlite
 *.sqlite3
 migrations/s
+lichess_db_puzzle.csv
 ./lichess_db_puzzle.csv
+
 
 # Environment variables
 .env
