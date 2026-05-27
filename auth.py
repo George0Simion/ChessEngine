@@ -46,8 +46,8 @@ def register():
     if User.query.filter_by(username=username).first():
         return jsonify({'ok': False, 'error': 'Username-ul există deja!'}), 400
 
-    # Hash-uim parola pentru siguranță
-    hashed_password = generate_password_hash(password)
+    # Hash-uim parola pentru siguranță (pbkdf2 explicit — scrypt nu e disponibil pe Python 3.9 fără OpenSSL cu suport scrypt)
+    hashed_password = generate_password_hash(password, method="pbkdf2:sha256")
     new_user = User(username=username, password_hash=hashed_password)
     db.session.add(new_user)
     db.session.flush() # Salvăm temporar pentru a obține ID-ul generat al userului

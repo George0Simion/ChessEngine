@@ -86,8 +86,35 @@
           </div>
         </section>
 
-        <aside class="side-panel" aria-label="Istoric mutari">
-          <div class="panel-header">
+        <aside class="side-panel" aria-label="Informatii partida">
+          <!-- Puzzle info card (visible only in puzzle mode) -->
+          <div class="puzzle-info" id="puzzle-info" hidden>
+            <div class="puzzle-info-header">
+              <span class="puzzle-rating-badge" id="puzzle-rating"></span>
+              <span class="puzzle-progress-text" id="puzzle-progress"></span>
+            </div>
+            <div class="puzzle-themes" id="puzzle-themes"></div>
+            <div class="puzzle-feedback" id="puzzle-feedback" hidden>
+              <span class="puzzle-feedback-icon" aria-hidden="true">&#8634;</span>
+              <span class="puzzle-feedback-text" id="puzzle-feedback-text">Mutare greșită — mai încearcă!</span>
+            </div>
+            <div class="puzzle-actions">
+              <button type="button" class="ghost puzzle-btn" id="puzzle-hint-btn" title="Arată mutarea corectă">
+                <span class="btn-icon" aria-hidden="true">&#128161;</span>
+                <span class="btn-label">Ajutor</span>
+              </button>
+              <button type="button" class="ghost puzzle-btn" id="puzzle-random-btn">
+                <span class="btn-icon" aria-hidden="true">&#127922;</span>
+                <span class="btn-label">Puzzle aleator</span>
+              </button>
+              <button type="button" class="ghost puzzle-btn" id="puzzle-theme-btn">
+                <span class="btn-icon" aria-hidden="true">&#128269;</span>
+                <span class="btn-label">Caută temă</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="panel-header" id="history-header">
             <h2>Istoric mutari</h2>
             <span class="badge" id="move-count">0</span>
           </div>
@@ -117,6 +144,11 @@
             <div class="mode-name">Contra bot</div>
             <div class="mode-desc">Joaca impotriva motorului.</div>
           </button>
+          <button type="button" class="mode-tile" data-mode="puzzle">
+            <div class="mode-icon" aria-hidden="true">&#129520;</div>
+            <div class="mode-name">Puzzle</div>
+            <div class="mode-desc">Rezolva pozitii tactice din Lichess.</div>
+          </button>
         </div>
 
         <div class="mode-options" id="mode-options" hidden>
@@ -126,6 +158,19 @@
               <button type="button" class="pill selected" data-color="white">Albe</button>
               <button type="button" class="pill" data-color="black">Negre</button>
               <button type="button" class="pill" data-color="random">Aleator</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mode-options" id="puzzle-options" hidden>
+          <div class="mode-options-row">
+            <h4>Temă</h4>
+            <div class="theme-search-wrap">
+              <input type="text" class="form-input" id="puzzle-theme-search"
+                     list="theme-datalist-modal"
+                     placeholder="Caută temă (ex: fork, pin, mate)…"
+                     autocomplete="off">
+              <datalist id="theme-datalist-modal"></datalist>
             </div>
           </div>
         </div>
@@ -155,6 +200,38 @@
         <div class="modal-actions">
           <button type="button" class="ghost" id="endgame-close">Vezi tabla</button>
           <button type="button" class="primary" id="endgame-reset">Joc nou</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Puzzle solved modal -->
+    <div class="modal-backdrop" id="puzzle-solved-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-solved-title">
+        <div class="endgame-icon" aria-hidden="true">&#129520;</div>
+        <h3 id="puzzle-solved-title">Puzzle rezolvat!</h3>
+        <p class="modal-text" id="puzzle-solved-text">Felicitari! Ai gasit toate mutarile corecte.</p>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="puzzle-solved-close">Vezi tabla</button>
+          <button type="button" class="primary" id="puzzle-solved-next">Puzzle nou</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Puzzle theme picker modal -->
+    <div class="modal-backdrop" id="puzzle-theme-modal" hidden>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="puzzle-theme-title">
+        <h3 id="puzzle-theme-title">Alege o temă</h3>
+        <p class="modal-text">Scrie sau alege o temă pentru puzzle-ul următor.</p>
+        <div class="theme-search-wrap">
+          <input type="text" class="form-input" id="puzzle-theme-picker-search"
+                 list="theme-datalist-picker"
+                 placeholder="Caută temă (ex: fork, pin, mate)…"
+                 autocomplete="off">
+          <datalist id="theme-datalist-picker"></datalist>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="puzzle-theme-cancel">Anulează</button>
+          <button type="button" class="primary" id="puzzle-theme-start">Start</button>
         </div>
       </div>
     </div>

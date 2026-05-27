@@ -68,6 +68,28 @@ const colorChoicesWrap = document.querySelector("#color-choices");
 const modeStart = document.querySelector("#mode-start");
 const modeCancel = document.querySelector("#mode-cancel");
 const botThinking = document.querySelector("#bot-thinking");
+// Puzzle DOM
+const puzzleInfoEl = document.querySelector("#puzzle-info");
+const puzzleRatingEl = document.querySelector("#puzzle-rating");
+const puzzleProgressEl = document.querySelector("#puzzle-progress");
+const puzzleThemesEl = document.querySelector("#puzzle-themes");
+const puzzleFeedbackEl = document.querySelector("#puzzle-feedback");
+const puzzleFeedbackTextEl = document.querySelector("#puzzle-feedback-text");
+const puzzleHintBtn = document.querySelector("#puzzle-hint-btn");
+const puzzleRandomBtn = document.querySelector("#puzzle-random-btn");
+const puzzleThemeBtn = document.querySelector("#puzzle-theme-btn");
+const puzzleSolvedModal = document.querySelector("#puzzle-solved-modal");
+const puzzleSolvedText = document.querySelector("#puzzle-solved-text");
+const puzzleSolvedClose = document.querySelector("#puzzle-solved-close");
+const puzzleSolvedNext = document.querySelector("#puzzle-solved-next");
+const puzzleThemeModal = document.querySelector("#puzzle-theme-modal");
+const puzzleThemePickerSearch = document.querySelector("#puzzle-theme-picker-search");
+const puzzleThemeCancel = document.querySelector("#puzzle-theme-cancel");
+const puzzleThemeStart = document.querySelector("#puzzle-theme-start");
+const puzzleOptionsEl = document.querySelector("#puzzle-options");
+const puzzleThemeSearch = document.querySelector("#puzzle-theme-search"); // in mode modal
+const themeDatalistModal = document.querySelector("#theme-datalist-modal");
+const themeDatalistPicker = document.querySelector("#theme-datalist-picker");
 
 // ----- Helpers -----
 
@@ -447,8 +469,126 @@ function renderModeButton(state) {
   if (session.mode === "vs_bot") {
     const human = session.botColor === "white" ? "Negre" : "Albe";
     modeButtonLabel.textContent = `vs Bot (${human})`;
+  } else if (session.mode === "puzzle") {
+    modeButtonLabel.textContent = "Puzzle";
   } else {
     modeButtonLabel.textContent = "1v1 Local";
+  }
+}
+
+function renderPuzzleInfo(state) {
+  const inPuzzle = isPuzzleMode(state);
+  puzzleInfoEl.hidden = !inPuzzle;
+  if (!inPuzzle) return;
+
+  const puzzle = state.puzzle || {};
+  const colorLabel = puzzle.solverColor === "white" ? "Albe" : "Negre";
+
+  puzzleRatingEl.textContent = `★ ${puzzle.rating || "?"}`;
+  puzzleProgressEl.textContent = puzzle.isComplete
+    ? "Rezolvat!"
+    : `${puzzle.completedSteps}/${puzzle.totalSteps} mutări (${colorLabel})`;
+
+  puzzleThemesEl.innerHTML = "";
+  for (const theme of (puzzle.themes || []).slice(0, 5)) {
+    const tag = document.createElement("span");
+    tag.className = "puzzle-theme-tag";
+    tag.textContent = theme;
+    puzzleThemesEl.appendChild(tag);
+  }
+}
+
+function triggerBoardFlash(kind) {
+  boardEl.classList.remove("flash-wrong", "flash-correct");
+  void boardEl.offsetWidth; // reflow
+  boardEl.classList.add(kind === "wrong" ? "flash-wrong" : "flash-correct");
+  setTimeout(() => boardEl.classList.remove("flash-wrong", "flash-correct"), 600);
+}
+
+function showPuzzleSolvedModal(state) {
+  const puzzle = state && state.puzzle;
+  puzzleSolvedText.textContent = puzzle && puzzle.rating
+    ? `Felicitări! Ai rezolvat un puzzle de rating ${puzzle.rating}.`
+    : "Felicitări! Ai găsit toate mutările corecte.";
+  puzzleSolvedModal.hidden = false;
+}
+
+async function loadPuzzle(theme) {
+  try {
+    const body = theme ? { theme } : {};
+    const response = await fetch("/api/puzzle/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!data.ok) throw new Error(data.error || "Nu pot încărca puzzle-ul.");
+    setMessage("");
+    endgameModal.hidden = true;
+    endgameSeen = false;
+    puzzleSolvedModal.hidden = true;
+    lastState = null;
+    // Auto-flip: solver with black pieces at bottom
+    const solverColor = data.state?.puzzle?.solverColor;
+    if (solverColor === "black" && !isFlipped) {
+      isFlipped = true;
+      rebuildSquaresLayout();
+      rebuildCoords();
+    } else if (solverColor === "white" && isFlipped) {
+      isFlipped = false;
+      rebuildSquaresLayout();
+      rebuildCoords();
+    }
+    applyState(data.state);
+    showPuzzleFeedback("Ce idee ai?", "hint");
+  } catch (err) {
+    setMessage("Puzzle: " + err.message);
+  }
+}
+
+let _puzzleFeedbackTimer = null;
+
+function showPuzzleFeedback(message, kind = "hint") {
+  if (!puzzleFeedbackEl) return;
+  if (puzzleFeedbackTextEl) puzzleFeedbackTextEl.textContent = message;
+  puzzleFeedbackEl.dataset.kind = kind;
+  // Force animation re-trigger so color change is visually immediate
+  puzzleFeedbackEl.style.animation = "none";
+  void puzzleFeedbackEl.offsetWidth;
+  puzzleFeedbackEl.style.animation = "";
+  puzzleFeedbackEl.hidden = false;
+  clearTimeout(_puzzleFeedbackTimer);
+  if (kind === "wrong") {
+    // Revert to prompt after 3.5s
+    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Ce idee ai?", "hint"), 3500);
+  } else if (kind === "good") {
+    // Revert to prompt after 1.5s
+    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Ce idee ai?", "hint"), 1500);
+  }
+}
+
+function hidePuzzleFeedback() {
+  if (!puzzleFeedbackEl) return;
+  puzzleFeedbackEl.hidden = true;
+  clearTimeout(_puzzleFeedbackTimer);
+}
+
+async function loadPuzzleThemes(...datalistEls) {
+  try {
+    const response = await fetch("/api/puzzle/themes");
+    const data = await response.json();
+    if (!data.ok || !data.themes) return;
+    for (const el of datalistEls) {
+      if (!el) continue;
+      el.innerHTML = "";
+      for (const theme of data.themes) {
+        const opt = document.createElement("option");
+        opt.value = theme;
+        el.appendChild(opt);
+      }
+    }
+  } catch {
+    // Puzzle DB unavailable — silently ignore
   }
 }
 
@@ -482,6 +622,7 @@ function applyState(newState) {
   renderUndoButton(newState);
   renderModeButton(newState);
   renderEndgame(newState);
+  renderPuzzleInfo(newState);
 
   // If we're in vs-bot mode and it's the bot's turn, kick the bot.
   scheduleBotMoveIfNeeded(newState);
@@ -501,6 +642,17 @@ function isBotsTurn(state) {
     session.botColor === state.turn &&
     state.status === "active"
   );
+}
+
+function isPuzzleMode(state) {
+  return state && state.session && state.session.mode === "puzzle";
+}
+
+function isPuzzleOpponentTurn(state) {
+  if (!isPuzzleMode(state)) return false;
+  const puzzle = state.puzzle;
+  if (!puzzle || puzzle.isComplete) return false;
+  return state.turn !== puzzle.solverColor;
 }
 
 // ----- Bot move scheduling -----
@@ -551,6 +703,9 @@ async function handleSquareClick(square) {
   if (!state || state.status !== "active") return;
   // Don't let the human move bot pieces.
   if (isBotsTurn(state)) return;
+  // In puzzle mode, only the solver can move and only when it's their turn.
+  if (isPuzzleOpponentTurn(state)) return;
+  if (isPuzzleMode(state) && state.puzzle && state.puzzle.isComplete) return;
 
   const piece = state.board[square];
 
@@ -587,8 +742,11 @@ async function handleSquareClick(square) {
 }
 
 async function selectSquare(square) {
+  const endpoint = (lastState && isPuzzleMode(lastState))
+    ? `/api/puzzle/moves?from=${encodeURIComponent(square)}`
+    : `/api/moves?from=${encodeURIComponent(square)}`;
   try {
-    const response = await fetch(`/api/moves?from=${encodeURIComponent(square)}`);
+    const response = await fetch(endpoint);
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Nu pot incarca mutarile.");
     selectedSquare = square;
@@ -605,15 +763,36 @@ async function selectSquare(square) {
 
 async function submitMove(origin, target, promotion) {
   interactionLocked = true;
+  const inPuzzle = lastState && isPuzzleMode(lastState);
+  const endpoint = inPuzzle ? "/api/puzzle/move" : "/api/move";
   try {
     const body = { from: origin, to: target };
     if (promotion) body.promotion = promotion;
-    const response = await fetch("/api/move", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
     const data = await response.json();
+
+    if (inPuzzle) {
+      selectedSquare = null;
+      legalMoves = [];
+      if (!data.ok || data.correct === false) {
+        triggerBoardFlash("wrong");
+        showPuzzleFeedback("Mutare greșită — mai încearcă!", "wrong");
+        if (data.state) applyState(data.state);
+        return;
+      }
+      setMessage("");
+      showPuzzleFeedback("Mutare bună!", "good");
+      applyState(data.state);
+      if (data.complete) {
+        showPuzzleSolvedModal(data.state);
+      }
+      return;
+    }
+
     if (!response.ok || !data.ok) throw new Error(data.error || "Mutarea a fost respinsa.");
     selectedSquare = null;
     legalMoves = [];
@@ -649,8 +828,15 @@ async function performUndo() {
 
 async function performReset() {
   if (interactionLocked) return;
-  // If we're mid-bot-move, just cancel pending state.
   if (botPending) return;
+
+  // In puzzle mode, "Joc nou" loads a new random puzzle in the same theme
+  if (lastState && isPuzzleMode(lastState)) {
+    const theme = lastState?.puzzle?.themes?.[0] || null;
+    await loadPuzzle(theme);
+    return;
+  }
+
   interactionLocked = true;
   try {
     const response = await fetch("/api/reset", { method: "POST" });
@@ -711,7 +897,7 @@ function openModeModal({ allowCancel = false } = {}) {
   // Pre-fill draft from current session if available.
   const session = lastState && lastState.session;
   if (session) {
-    modeDraft.mode = session.mode || "local";
+    modeDraft.mode = session.mode === "puzzle" ? "puzzle" : (session.mode || "local");
     if (session.botColor) {
       // Human plays the opposite color of the bot.
       modeDraft.color = session.botColor === "white" ? "black" : "white";
@@ -720,6 +906,11 @@ function openModeModal({ allowCancel = false } = {}) {
   modeCancel.hidden = !allowCancel;
   syncModeUI();
   modeModal.hidden = false;
+
+  // Populate puzzle theme datalists lazily
+  if (themeDatalistModal && themeDatalistModal.options.length === 0) {
+    loadPuzzleThemes(themeDatalistModal, themeDatalistPicker);
+  }
 }
 
 function closeModeModal() {
@@ -731,6 +922,7 @@ function syncModeUI() {
     tile.classList.toggle("selected", tile.dataset.mode === modeDraft.mode);
   }
   modeOptions.hidden = modeDraft.mode !== "vs_bot";
+  puzzleOptionsEl.hidden = modeDraft.mode !== "puzzle";
 
   for (const pill of colorChoicesWrap.querySelectorAll(".pill")) {
     pill.classList.toggle("selected", pill.dataset.color === modeDraft.color);
@@ -738,6 +930,13 @@ function syncModeUI() {
 }
 
 async function startSelectedMode() {
+  if (modeDraft.mode === "puzzle") {
+    closeModeModal();
+    const theme = puzzleThemeSearch ? puzzleThemeSearch.value.trim() : "";
+    await loadPuzzle(theme || null);
+    return;
+  }
+
   const body = { mode: modeDraft.mode };
   if (modeDraft.mode === "vs_bot") {
     let humanColor = modeDraft.color;
@@ -992,5 +1191,60 @@ flipButton.addEventListener("click", performFlip);
 resetButton.addEventListener("click", performReset);
 endgameClose.addEventListener("click", () => { endgameModal.hidden = true; });
 endgameReset.addEventListener("click", () => { endgameModal.hidden = true; performReset(); });
+
+// ----- Puzzle controls -----
+
+let _hintClearTimer = null;
+
+async function showPuzzleHint() {
+  try {
+    const res = await fetch("/api/puzzle/hint");
+    const data = await res.json();
+    if (!data.ok) { setMessage(data.error || "Nu există indiciu.", "error"); return; }
+
+    // Highlight the hint squares on the board
+    clearTimeout(_hintClearTimer);
+    selectedSquare = data.from;
+    legalMoves = [data.to];
+    if (lastState) renderHighlights(lastState);
+    showPuzzleFeedback(`Mută din ${data.from} în ${data.to}`, "hint");
+
+    _hintClearTimer = setTimeout(() => {
+      selectedSquare = null;
+      legalMoves = [];
+      if (lastState) renderHighlights(lastState);
+    }, 4000);
+  } catch (err) {
+    setMessage("Ajutor: " + err.message);
+  }
+}
+
+puzzleHintBtn.addEventListener("click", showPuzzleHint);
+puzzleRandomBtn.addEventListener("click", () => loadPuzzle(null));
+
+puzzleThemeBtn.addEventListener("click", () => {
+  if (themeDatalistPicker && themeDatalistPicker.options.length === 0) {
+    loadPuzzleThemes(themeDatalistModal, themeDatalistPicker);
+  }
+  puzzleThemeModal.hidden = false;
+});
+puzzleThemeCancel.addEventListener("click", () => {
+  puzzleThemeModal.hidden = true;
+});
+puzzleThemeStart.addEventListener("click", () => {
+  const theme = (puzzleThemePickerSearch ? puzzleThemePickerSearch.value.trim() : "") || null;
+  puzzleThemeModal.hidden = true;
+  if (puzzleThemePickerSearch) puzzleThemePickerSearch.value = "";
+  loadPuzzle(theme);
+});
+
+puzzleSolvedClose.addEventListener("click", () => {
+  puzzleSolvedModal.hidden = true;
+});
+puzzleSolvedNext.addEventListener("click", () => {
+  puzzleSolvedModal.hidden = true;
+  const theme = lastState?.puzzle?.themes?.[0] || null;
+  loadPuzzle(theme);
+});
 
 checkAuthAndLoad();

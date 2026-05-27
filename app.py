@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 from flask import Flask, jsonify, request, send_from_directory
 
 from chessmate import ChessGame, InvalidMoveError, build_engine
 from chessmate.engine import Engine
+from chessmate.puzzle import PuzzleLoader, PuzzleSession
 from models import db, User, Rating, Game
 from flask_migrate import Migrate
 from auth import auth_bp
@@ -17,6 +18,13 @@ MODE_LOCAL = "local"      # 1v1 hot-seat
 MODE_VS_BOT = "vs_bot"    # human vs engine
 
 VALID_MODES = {MODE_LOCAL, MODE_VS_BOT}
+
+
+PUZZLE_CSV_PATH = os.path.join(os.path.dirname(__file__), "lichess_db_puzzle.csv")
+
+
+def _find_puzzle_csv() -> Optional[str]:
+    return PUZZLE_CSV_PATH if os.path.isfile(PUZZLE_CSV_PATH) else None
 
 
 @dataclass
@@ -62,6 +70,19 @@ def create_app() -> Flask:
         db.create_all()
 
     session = GameSession(game=ChessGame())
+
+    # Puzzle state — lazy-loaded on first puzzle request.
+    puzzle_loader: Optional[PuzzleLoader] = None
+    puzzle_session: Optional[PuzzleSession] = None
+
+    def _get_loader() -> Optional[PuzzleLoader]:
+        nonlocal puzzle_loader
+        if puzzle_loader is None:
+            csv_path = _find_puzzle_csv()
+            if csv_path is None:
+                return None
+            puzzle_loader = PuzzleLoader(csv_path)
+        return puzzle_loader
 
     # ------------------------------------------------------------------
     # Static
@@ -248,6 +269,91 @@ def create_app() -> Flask:
         session.game.reset()
         return jsonify({"ok": True, "state": _state_with_session(session)})
 
+    # ------------------------------------------------------------------
+    # Puzzle
+    # ------------------------------------------------------------------
+
+    @app.get("/api/puzzle/moves")
+    def puzzle_moves():
+        if puzzle_session is None:
+            return jsonify({"ok": False, "error": "Niciun puzzle activ.", "moves": []}), 404
+        origin = request.args.get("from", "")
+        try:
+            return jsonify({
+                "ok": True,
+                "from": origin.strip().lower(),
+                "moves": puzzle_session.game.legal_moves_for(origin),
+                "state": puzzle_session.get_state(),
+            })
+        except InvalidMoveError as exc:
+            return jsonify({
+                "ok": False,
+                "error": str(exc),
+                "moves": [],
+                "state": puzzle_session.get_state(),
+            }), 400
+
+    @app.get("/api/puzzle/hint")
+    def puzzle_hint():
+        if puzzle_session is None:
+            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+        if puzzle_session.is_complete():
+            return jsonify({"ok": False, "error": "Puzzle-ul este deja rezolvat."}), 400
+        uci = puzzle_session.solution_moves[puzzle_session.current_step]
+        return jsonify({
+            "ok": True,
+            "from": uci[:2],
+            "to": uci[2:4],
+        })
+
+    @app.get("/api/puzzle/themes")
+    def puzzle_themes():
+        loader = _get_loader()
+        if loader is None:
+            return jsonify({"ok": False, "error": _puzzle_unavailable_msg()}), 503
+        return jsonify({"ok": True, "themes": loader.get_themes()})
+
+    @app.post("/api/puzzle/new")
+    def puzzle_new():
+        nonlocal puzzle_session
+        loader = _get_loader()
+        if loader is None:
+            return jsonify({"ok": False, "error": _puzzle_unavailable_msg()}), 503
+
+        body = request.get_json(silent=True) or {}
+        theme = (body.get("theme") or "").strip() or None
+
+        puzzle_data = loader.get_random(theme)
+        if puzzle_data is None:
+            return jsonify({"ok": False, "error": "Nu s-a găsit niciun puzzle."}), 404
+
+        try:
+            puzzle_session = PuzzleSession(puzzle_data)
+        except Exception as exc:
+            return jsonify({"ok": False, "error": f"Eroare la încărcarea puzzle-ului: {exc}"}), 500
+
+        return jsonify({"ok": True, "state": puzzle_session.get_state()})
+
+    @app.get("/api/puzzle/state")
+    def puzzle_state_endpoint():
+        if puzzle_session is None:
+            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+        return jsonify({"ok": True, "state": puzzle_session.get_state()})
+
+    @app.post("/api/puzzle/move")
+    def puzzle_move():
+        if puzzle_session is None:
+            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+
+        body = request.get_json(silent=True) or {}
+        from_sq = body.get("from", "")
+        to_sq = body.get("to", "")
+        promotion = body.get("promotion")
+
+        result = puzzle_session.try_move(from_sq, to_sq, promotion=promotion)
+        status_code = 200 if result.get("ok") else 400
+        return jsonify(result), status_code
+
     return app
 
 
@@ -255,6 +361,14 @@ def _state_with_session(session: GameSession) -> dict:
     payload = session.game.state()
     payload["session"] = session.mode_info()
     return payload
+
+
+def _puzzle_unavailable_msg() -> str:
+    return (
+        "Baza de date de puzzle-uri nu este disponibilă. "
+        "Descarcă fișierul CSV de pe Kaggle și setează "
+        "variabila de mediu PUZZLE_CSV_PATH cu calea către el."
+    )
 
 
 app = create_app()

@@ -57,6 +57,14 @@ PROMOTION_PIECES = {QUEEN, ROOK, BISHOP, KNIGHT}
 # Kings are intentionally NOT counted in material — used only for endgame logic.
 PIECE_VALUES = {PAWN: 1, KNIGHT: 3, BISHOP: 3, ROOK: 5, QUEEN: 9, KING: 0}
 
+# FEN piece-letter to (color, kind) mapping — used by load_fen().
+FEN_PIECE_LETTERS: dict[str, tuple[str, str]] = {
+    "P": (WHITE, PAWN),   "N": (WHITE, KNIGHT), "B": (WHITE, BISHOP),
+    "R": (WHITE, ROOK),   "Q": (WHITE, QUEEN),  "K": (WHITE, KING),
+    "p": (BLACK, PAWN),   "n": (BLACK, KNIGHT), "b": (BLACK, BISHOP),
+    "r": (BLACK, ROOK),   "q": (BLACK, QUEEN),  "k": (BLACK, KING),
+}
+
 
 class InvalidMoveError(ValueError):
     """Raised when a move or square selection is invalid."""
@@ -198,6 +206,52 @@ class ChessGame:
         self.position_counts = {}
         self._cached_status = None
         # Seed the position counter with the starting position.
+        self._bump_position_count()
+
+    def load_fen(self, fen: str) -> None:
+        """Reset the game to the position described by a FEN string."""
+        parts = fen.strip().split()
+        if len(parts) < 2:
+            raise InvalidMoveError(f"FEN invalid: {fen!r}")
+
+        board_str, color_str = parts[0], parts[1]
+        castling_str = parts[2] if len(parts) > 2 else "-"
+        ep_str = parts[3] if len(parts) > 3 else "-"
+        halfmove_str = parts[4] if len(parts) > 4 else "0"
+
+        ranks = board_str.split("/")
+        if len(ranks) != 8:
+            raise InvalidMoveError(f"FEN board invalida: {board_str!r}")
+
+        board: dict[str, Piece] = {}
+        for rank_idx, rank_str in enumerate(ranks):
+            rank_num = 8 - rank_idx  # FEN ranks run 8→1 top-to-bottom
+            file_idx = 0
+            for ch in rank_str:
+                if ch.isdigit():
+                    file_idx += int(ch)
+                elif ch in FEN_PIECE_LETTERS:
+                    color, kind = FEN_PIECE_LETTERS[ch]
+                    board[FILES[file_idx] + str(rank_num)] = Piece(color, kind)
+                    file_idx += 1
+                else:
+                    raise InvalidMoveError(f"Caracter FEN necunoscut: {ch!r}")
+
+        self.board = board
+        self.turn = WHITE if color_str == "w" else BLACK
+        self.castling_rights = {
+            WHITE: {"K": "K" in castling_str, "Q": "Q" in castling_str},
+            BLACK: {"K": "k" in castling_str, "Q": "q" in castling_str},
+        }
+        self.en_passant_target = None if ep_str == "-" else ep_str.lower()
+        try:
+            self.halfmove_clock = int(halfmove_str)
+        except ValueError:
+            self.halfmove_clock = 0
+        self.history = []
+        self.captured = {WHITE: [], BLACK: []}
+        self.position_counts = {}
+        self._cached_status = None
         self._bump_position_count()
 
     def state(self) -> dict[str, object]:
