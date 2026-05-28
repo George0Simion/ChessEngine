@@ -4,6 +4,14 @@ import os
 from dataclasses import dataclass, field
 from typing import Optional
 
+# Load a local .env if present (no-op in production where env vars are set by
+# the platform). python-dotenv is a declared dependency.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 from flask import Flask, jsonify, request, send_from_directory
 
 from chessmate import ChessGame, InvalidMoveError
@@ -49,12 +57,23 @@ class GameSession:
 
 
 def create_app() -> Flask:
-    app = Flask(__name__, static_folder="static", static_url_path="/static")
+    # Persistent runtime files (SQLite fallback DB, analysis cache) live under
+    # the Flask instance folder. In production set DATA_DIR (e.g. a mounted
+    # disk) to relocate them; locally it defaults to <project>/instance.
+    data_dir = os.environ.get("DATA_DIR")
+    if data_dir:
+        app = Flask(
+            __name__, static_folder="static", static_url_path="/static",
+            instance_path=os.path.abspath(data_dir),
+        )
+    else:
+        app = Flask(__name__, static_folder="static", static_url_path="/static")
+    os.makedirs(app.instance_path, exist_ok=True)
 
     # ------------------------------------------------------------------ Config
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
-        db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "chessmate.db"))
+        db_path = os.path.join(app.instance_path, "chessmate.db")
         db_url = f"sqlite:///{db_path.replace(os.sep, '/') }"
     # Heroku/Render use postgres:// but SQLAlchemy 1.4+ needs postgresql://
     if db_url.startswith("postgres://"):
@@ -64,6 +83,11 @@ def create_app() -> Flask:
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["SECRET_KEY"] = os.environ.get(
         "SECRET_KEY", "dev-secret-change-in-production"
+    )
+    # JWT signing key: prefer a dedicated secret, fall back to SECRET_KEY so a
+    # single configured secret still works.
+    app.config["JWT_SECRET_KEY"] = (
+        os.environ.get("JWT_SECRET_KEY") or app.config["SECRET_KEY"]
     )
 
     db.init_app(app)
@@ -528,5 +552,11 @@ app = create_app()
 if __name__ == "__main__":
     host = os.environ.get("HOST", "127.0.0.1")
     port = int(os.environ.get("PORT", "5000"))
-    debug = os.environ.get("FLASK_DEBUG", "1").lower() not in {"0", "false", "no"}
+    # Debug is OFF unless explicitly enabled, so `python app.py` is prod-safe.
+    # (Production normally runs via gunicorn, which never executes this block.)
+    flask_env = os.environ.get("FLASK_ENV", "").lower()
+    debug = (
+        os.environ.get("FLASK_DEBUG", "").lower() in {"1", "true", "yes"}
+        or flask_env == "development"
+    )
     app.run(host=host, port=port, debug=debug)

@@ -9,6 +9,13 @@ from models import db, User, Rating, Game
 # Creăm un "Blueprint" pentru a grupa rutele de autentificare
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
+
+def _jwt_secret() -> str:
+    """Key used to sign/verify JWTs. Prefer JWT_SECRET_KEY, fall back to
+    SECRET_KEY so a single configured secret still works. The multiplayer
+    service resolves the same value so tokens validate across services."""
+    return current_app.config.get('JWT_SECRET_KEY') or current_app.config['SECRET_KEY']
+
 def token_required(f):
     """Decorator pentru a proteja rutele care necesită utilizator logat."""
     @wraps(f)
@@ -24,7 +31,7 @@ def token_required(f):
             return jsonify({'ok': False, 'error': 'Token lipsă!'}), 401
         
         try:
-            data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=["HS256"])
+            data = jwt.decode(token, _jwt_secret(), algorithms=["HS256"])
             current_user = User.query.get(data['user_id'])
             if not current_user:
                 raise Exception("Utilizator invalid")
@@ -74,7 +81,7 @@ def login():
     token = jwt.encode({
         'user_id': user.id,
         'exp': datetime.utcnow() + timedelta(days=7)
-    }, current_app.config['SECRET_KEY'], algorithm="HS256")
+    }, _jwt_secret(), algorithm="HS256")
 
     return jsonify({'ok': True, 'token': token, 'username': user.username})
 
