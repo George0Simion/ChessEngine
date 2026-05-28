@@ -514,13 +514,17 @@ def _ensure_games_schema() -> None:
     except Exception:
         return  # table doesn't exist yet, create_all handled it
 
+    dialect = db.engine.dialect.name
+    bool_default = "FALSE" if dialect == "postgresql" else "0"
+    datetime_type = "TIMESTAMP" if dialect == "postgresql" else "DATETIME"
+
     needed = [
-        ("white_is_bot",  "BOOLEAN NOT NULL DEFAULT 0"),
-        ("black_is_bot",  "BOOLEAN NOT NULL DEFAULT 0"),
+        ("white_is_bot",  f"BOOLEAN NOT NULL DEFAULT {bool_default}"),
+        ("black_is_bot",  f"BOOLEAN NOT NULL DEFAULT {bool_default}"),
         ("bot_level",     "INTEGER"),
         ("current_fen",   "TEXT"),
         ("result_reason", "VARCHAR(40)"),
-        ("updated_at",    "DATETIME"),
+        ("updated_at",    datetime_type),
     ]
     fen_start = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
@@ -529,6 +533,7 @@ def _ensure_games_schema() -> None:
             continue
         try:
             db.session.execute(text(f"ALTER TABLE games ADD COLUMN {col} {sql_type}"))
+            db.session.commit()
         except Exception:
             db.session.rollback()
             continue

@@ -1300,7 +1300,12 @@ function decorateMultiplayerState(state) {
     roomId: mpInfo ? mpInfo.roomId : null,
     timeControl: mpInfo ? mpInfo.timeControl : null,
   };
-  return { ...state, session, canUndo: false };
+  return {
+    ...state,
+    session,
+    canUndo: false,
+    yourColor: mpInfo ? mpInfo.color : null,
+  };
 }
 
 async function loadMultiplayerConfig() {
@@ -1546,6 +1551,9 @@ function handleMultiplayerMessage(event) {
       if (msg.clock) mpClock = msg.clock;
       if (msg.state) {
         applyState(decorateMultiplayerState(msg.state));
+      }
+      if (msg.gameId) {
+        showEndgameCtas({ gameId: msg.gameId, canAnalyze: false });
       }
       return;
     case "opponent_left":
@@ -2192,6 +2200,7 @@ async function handleGameEnd(state) {
 // Reveal the Review / Analyze buttons in BOTH the end-game modal and the
 // side panel, wired to the right destination (saved bot game vs local replay).
 function showEndgameCtas({ gameId = null, local = false, canAnalyze = false } = {}) {
+  const canReview = !!gameId || local;
   const reviewAction = gameId
     ? () => { location.href = `/games/${gameId}/review`; }
     : () => openLocalReview({ analyze: true });
@@ -2203,8 +2212,8 @@ function showEndgameCtas({ gameId = null, local = false, canAnalyze = false } = 
 
   // Modal buttons
   if (endgameReview) {
-    endgameReview.hidden = false;
-    endgameReview.onclick = reviewAction;
+    endgameReview.hidden = !canReview;
+    if (canReview) endgameReview.onclick = reviewAction;
   }
   if (endgameAnalyze) {
     endgameAnalyze.hidden = !(canAnalyze && analyzeAction);

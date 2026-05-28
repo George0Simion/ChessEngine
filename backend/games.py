@@ -386,7 +386,7 @@ def history(current_user):
         else:
             result = "loss"
 
-        moves = (g.moves_history or "").split()
+        moves = _moves_list(g)
         analysis_ready = os.path.isfile(_analysis_path(g.id))
 
         out.append({
@@ -458,7 +458,11 @@ def record(current_user):
 
     g.updated_at = datetime.utcnow()
     db.session.add(g)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
     return jsonify({"ok": True, "game_id": g.id}), 201
 
@@ -680,7 +684,7 @@ def _is_sacrifice(played_color: str, fen_before: str, fen_after: str) -> bool:
     return delta <= -2 if played_color == "white" else delta >= 2
 
 
-def _run_analysis(plies: list, time_ms: int = 350, max_depth: int = 8) -> dict:
+def _run_analysis(plies: list, time_ms: int = 100, max_depth: int = 8) -> dict:
     from engine import api as engine_api
 
     moves_out = []

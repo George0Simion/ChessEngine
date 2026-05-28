@@ -57,7 +57,7 @@ async def _authenticate(websocket: WebSocket) -> Optional[dict[str, Any]]:
         await websocket.close(code=1008)
         return None
 
-    user = authenticate_token(token)
+    user = await asyncio.to_thread(authenticate_token, token)
     if not user:
         await _send_error(websocket, "Invalid token.")
         await websocket.close(code=1008)

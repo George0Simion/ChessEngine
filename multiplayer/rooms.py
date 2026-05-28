@@ -221,6 +221,7 @@ class Room:
             payload = {
                 "type": "game_over",
                 "roomId": self.room_id,
+                "gameId": self.game_id,
                 "status": status,
                 "winner": winner,
                 "reason": reason,

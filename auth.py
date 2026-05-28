@@ -104,12 +104,13 @@ def get_me(current_user):
             "date": g.created_at.isoformat()
         })
 
+    r = current_user.rating
     return jsonify({
         'ok': True,
         'user': {
             'username': current_user.username,
-            'rating': round(current_user.rating.rating),
-            'rd': round(current_user.rating.rd)
+            'rating': round(r.rating) if r else 1500,
+            'rd': round(r.rd) if r else 350,
         },
         'history': history
     })
