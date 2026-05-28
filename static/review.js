@@ -26,6 +26,7 @@ let meta = {};
 let currentIndex = 0;    // 0 = starting position; 1..plies.length = after that ply
 let analysis = null;     // { moves: [...], summary: {...} }
 let isFlipped = false;
+let localReviewMoves = [];
 
 // ----- DOM -----
 const squaresLayer = document.querySelector('#squares-layer');
@@ -51,6 +52,10 @@ const analysisPanel = document.querySelector('#analysis-panel');
 const analysisSummary = document.querySelector('#analysis-summary');
 const analysisCurrent = document.querySelector('#analysis-current');
 const reviewTitle = document.querySelector('#review-title');
+const reviewEval = document.querySelector('#review-eval');
+const reviewEvalScore = document.querySelector('#review-eval-score');
+const reviewEvalBlack = document.querySelector('#review-eval-black');
+const reviewEvalWhite = document.querySelector('#review-eval-white');
 
 // ----- Board scaffold -----
 function buildScaffold() {
@@ -272,11 +277,113 @@ function applyHeader() {
   document.title = `${title} — Review`;
 }
 
+function isActiveReview() {
+  return !meta.status || meta.status === 'active';
+}
+
+function evalFromMove(a, field, mateField) {
+  if (!a) return null;
+  const sideMultiplier = a.color === 'white' ? 1 : -1;
+  const cp = a[field];
+  const mate = a[mateField];
+  return {
+    cp: cp == null ? null : sideMultiplier * cp,
+    mate: mate == null ? null : sideMultiplier * mate,
+  };
+}
+
+function evaluationForCurrentPosition() {
+  if (!analysis || !Array.isArray(analysis.moves) || analysis.moves.length === 0) {
+    return null;
+  }
+  if (currentIndex === 0) {
+    return evalFromMove(analysis.moves[0], 'eval_before', 'mate_before');
+  }
+  return evalFromMove(analysis.moves[currentIndex - 1], 'eval_after', 'mate_after');
+}
+
+function whiteShareForEval(ev) {
+  if (!ev) return 50;
+  if (ev.mate != null) {
+    return ev.mate > 0 ? 96 : 4;
+  }
+  const cp = Math.max(-1800, Math.min(1800, ev.cp || 0));
+  return 50 + Math.tanh(cp / 650) * 45;
+}
+
+function evalScoreText(ev) {
+  if (!ev) return '0.00';
+  if (ev.mate != null) {
+    const side = ev.mate > 0 ? 'White' : 'Black';
+    return `${side}\nM${Math.abs(ev.mate)}`;
+  }
+  const cp = ev.cp || 0;
+  if (Math.abs(cp) < 10) return '0.00';
+  const side = cp > 0 ? 'White' : 'Black';
+  return `${side}\n+${(Math.abs(cp) / 100).toFixed(2)}`;
+}
+
+function renderEvalBar() {
+  if (!reviewEval || !reviewEvalWhite || !reviewEvalBlack || !reviewEvalScore) return;
+  if (!analysis || isActiveReview()) {
+    reviewEval.hidden = true;
+    return;
+  }
+
+  const ev = evaluationForCurrentPosition();
+  if (!ev) {
+    reviewEval.hidden = true;
+    return;
+  }
+
+  const whiteShare = Math.max(4, Math.min(96, whiteShareForEval(ev)));
+  reviewEvalWhite.style.height = `${whiteShare}%`;
+  reviewEvalBlack.style.height = `${100 - whiteShare}%`;
+  reviewEvalScore.textContent = evalScoreText(ev);
+  reviewEvalScore.classList.toggle('white-adv', ev.mate != null ? ev.mate > 0 : (ev.cp || 0) > 10);
+  reviewEvalScore.classList.toggle('black-adv', ev.mate != null ? ev.mate < 0 : (ev.cp || 0) < -10);
+  reviewEvalScore.classList.toggle('equal', ev.mate == null && Math.abs(ev.cp || 0) <= 10);
+  reviewEval.hidden = false;
+}
+
+function moveQuality(a) {
+  const cpLoss = a && a.cp_loss != null ? Number(a.cp_loss) : null;
+  const cat = a ? a.category : '';
+  const isOpening = a && a.ply <= 10;
+
+  if (cat === 'Brilliant' && !isOpening) {
+    return { key: 'siuuuu', label: 'Siuuuu!!! move', detail: 'A brilliant idea that keeps or improves the advantage.' };
+  }
+  if (cpLoss === 0 || (cpLoss != null && cpLoss <= 10)) {
+    return { key: 'great', label: 'Great move', detail: 'Keeps the advantage almost perfectly.' };
+  }
+  if (cpLoss != null && cpLoss <= 60) {
+    return { key: 'great', label: 'Great move', detail: `Loses only ${(cpLoss / 100).toFixed(2)} pawns of advantage.` };
+  }
+  if (cpLoss != null && cpLoss <= 120) {
+    return { key: 'decent', label: 'Decent move', detail: `Gives up about ${(cpLoss / 100).toFixed(2)} pawns of advantage.` };
+  }
+  if (cpLoss != null && cpLoss <= 250) {
+    return { key: 'bad', label: 'Bad move', detail: `Drops ${(cpLoss / 100).toFixed(2)} pawns from the position.` };
+  }
+  if (cat === 'Best' || cat === 'Excellent') {
+    return { key: 'great', label: 'Great move', detail: 'Keeps the position under control.' };
+  }
+  if (cat === 'Good' || cat === 'Inaccuracy') {
+    return { key: 'decent', label: 'Decent move', detail: 'The position remains playable.' };
+  }
+  if (cat === 'Mistake') {
+    return { key: 'bad', label: 'Bad move', detail: 'The advantage drops noticeably.' };
+  }
+  return { key: 'blunder', label: 'Blunder', detail: 'Loses a lot of the position evaluation.' };
+}
+
 // ----- Analysis -----
 function renderAnalysisSummary() {
   if (!analysis) {
     analysisPanel.hidden = true;
     reviewSummaryMini.textContent = '';
+    renderEvalBar();
     return;
   }
   analysisPanel.hidden = false;
@@ -297,6 +404,7 @@ function renderAnalysisSummary() {
 }
 
 function renderAnalysisCurrent() {
+  renderEvalBar();
   if (!analysis) { analysisCurrent.innerHTML = ''; return; }
   if (currentIndex === 0) {
     analysisCurrent.innerHTML = '<p class="analysis-empty">Use ◀ ▶ to step through.</p>';
@@ -307,12 +415,17 @@ function renderAnalysisCurrent() {
   const evalStr = (v) => v == null ? '—' : (v > 0 ? `+${(v/100).toFixed(2)}` : (v/100).toFixed(2));
   const cpLoss = a.cp_loss == null ? '' : ` · cp loss ${a.cp_loss}`;
   const bestLine = (a.best_line || []).slice(0, 4).join(' ');
+  const quality = moveQuality(a);
   analysisCurrent.innerHTML = `
     <p class="ac-played">
       <span class="ac-num">${a.ply}.</span>
       <span class="ac-san">${a.san}</span>
       <span class="move-cat-pill cat-${a.category.toLowerCase()}">${CATEGORY_LABEL[a.category]}</span>
     </p>
+    <div class="move-quality-card quality-${quality.key}">
+      <span class="move-quality-label">${quality.label}</span>
+      <span class="move-quality-detail">${quality.detail}</span>
+    </div>
     <p class="ac-row"><span class="ac-key">Best</span><span class="ac-val">${a.best_move || '—'}</span></p>
     <p class="ac-row"><span class="ac-key">Eval</span><span class="ac-val">${evalStr(a.eval_before)} → ${evalStr(a.eval_after)}${cpLoss}</span></p>
     ${bestLine ? `<p class="ac-row"><span class="ac-key">Line</span><span class="ac-val mono">${bestLine}</span></p>` : ''}
@@ -339,7 +452,13 @@ async function runAnalysis() {
   analyzeProgress.hidden = false;
   analyzeProgress.textContent = `Analyzing ${plies.length} moves…`;
   try {
-    const res = await authFetch(`/games/${gameId}/analyze`, { method: 'POST' });
+    const res = isLocalReview
+      ? await fetch('/games/replay/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ moves: localReviewMoves }),
+        })
+      : await authFetch(`/games/${gameId}/analyze`, { method: 'POST' });
     const data = await res.json();
     if (!data || !data.ok) {
       analyzeProgress.textContent = `Failed: ${data && data.error ? data.error : 'unknown error'}`;
@@ -393,6 +512,7 @@ async function loadLocalGame() {
     document.body.innerHTML = '<p style="padding:24px">No local game to review.</p>';
     return null;
   }
+  localReviewMoves = stash.moves.map((m) => String(m));
   const res = await fetch('/games/replay', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -433,11 +553,16 @@ async function boot() {
   renderMovesList();
   goTo(plies.length); // start at the end of the game
 
-  // Engine analysis is only offered for finished, persisted games.
-  // Local (unsaved) games and still-active games don't get the Analyze CTA.
+  // Engine analysis is only offered for finished games. Saved games use the
+  // cached DB-backed endpoint; local games send their stashed moves statelessly.
   const isActive = !meta.status || meta.status === 'active';
-  if (isLocalReview || isActive) {
+  if (isActive) {
     analyzeCta.hidden = true;
+  } else if (isLocalReview) {
+    analyzeCta.hidden = false;
+    if ((new URLSearchParams(location.search)).get('analyze') === '1') {
+      await runAnalysis();
+    }
   } else if (data.analysis_ready || (new URLSearchParams(location.search)).get('analyze') === '1') {
     const had = await loadAnalysis();
     if (!had && (new URLSearchParams(location.search)).get('analyze') === '1') {

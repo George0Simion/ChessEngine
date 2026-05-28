@@ -2169,7 +2169,7 @@ async function handleGameEnd(state) {
           result_reason: _REASON_CANON[state.status] || null,
         },
       };
-      showEndgameCtas({ local: true, canAnalyze: false });
+      showEndgameCtas({ local: true, canAnalyze: true });
     }
   } else if (sess.mode === 'local') {
     // Local games aren't persisted — stash moves so the review page can
@@ -2184,7 +2184,7 @@ async function handleGameEnd(state) {
         result_reason: _REASON_CANON[state.status] || null,
       },
     };
-    showEndgameCtas({ local: true, canAnalyze: false });
+    showEndgameCtas({ local: true, canAnalyze: true });
   }
   // Multiplayer games are saved server-side and reviewable from the profile.
 }
@@ -2194,10 +2194,12 @@ async function handleGameEnd(state) {
 function showEndgameCtas({ gameId = null, local = false, canAnalyze = false } = {}) {
   const reviewAction = gameId
     ? () => { location.href = `/games/${gameId}/review`; }
-    : () => openLocalReview();
+    : () => openLocalReview({ analyze: true });
   const analyzeAction = gameId
     ? () => { location.href = `/games/${gameId}/review?analyze=1`; }
-    : null;
+    : local
+      ? () => openLocalReview({ analyze: true })
+      : null;
 
   // Modal buttons
   if (endgameReview) {
@@ -2220,12 +2222,12 @@ function showEndgameCtas({ gameId = null, local = false, canAnalyze = false } = 
 }
 
 // Stash the local game and open the review page (no DB id needed).
-function openLocalReview() {
+function openLocalReview({ analyze = false } = {}) {
   if (!lastFinishedLocal) return;
   try {
     sessionStorage.setItem('chessmate_local_review', JSON.stringify(lastFinishedLocal));
   } catch (_) { /* ignore quota errors */ }
-  location.href = '/review';
+  location.href = analyze ? '/review?analyze=1' : '/review';
 }
 
 async function boot() {

@@ -33,11 +33,22 @@
             </div>
           </div>
 
-          <div id="board" class="board" aria-label="Chessboard">
-            <div class="squares-layer" id="squares-layer"></div>
-            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
-            <div class="coords-files" id="coords-files"></div>
-            <div class="coords-ranks" id="coords-ranks"></div>
+          <div class="review-board-row">
+            <div class="review-eval" id="review-eval" hidden aria-label="Position evaluation">
+              <div class="review-eval-score" id="review-eval-score">0.00</div>
+              <div class="review-eval-bar" aria-hidden="true">
+                <div class="review-eval-seg black" id="review-eval-black"></div>
+                <div class="review-eval-zero"></div>
+                <div class="review-eval-seg white" id="review-eval-white"></div>
+              </div>
+            </div>
+
+            <div id="board" class="board" aria-label="Chessboard">
+              <div class="squares-layer" id="squares-layer"></div>
+              <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
+              <div class="coords-files" id="coords-files"></div>
+              <div class="coords-ranks" id="coords-ranks"></div>
+            </div>
           </div>
 
           <div class="player-card" id="player-bottom">

@@ -56,3 +56,5 @@ models/
 
 # Raw Kaggle dataset (large)
 lichess-*.csv
+
+tools/make_project_presentation.py

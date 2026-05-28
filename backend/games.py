@@ -613,6 +613,27 @@ def replay_adhoc():
     })
 
 
+@games_bp.post('/replay/analyze')
+def analyze_replay_adhoc():
+    """Run engine analysis for an unsaved replay.
+
+    Used by local 1v1 games: they are not persisted in the DB, so the review
+    page sends the stashed UCI move list back here.
+    """
+    data = request.get_json(silent=True) or {}
+    moves = data.get("moves") or []
+    if not isinstance(moves, list):
+        return jsonify({"ok": False, "error": "moves must be a list"}), 400
+    if not moves:
+        return jsonify({"ok": False, "error": "game has no moves"}), 400
+
+    replay = _replay_game([str(m) for m in moves])
+    if not replay["ok"]:
+        return jsonify({"ok": False, "error": replay.get("error") or "replay failed"}), 400
+
+    return jsonify(_run_analysis(replay["plies"]))
+
+
 # ---------- Analysis ----------
 
 _CATEGORY_THRESHOLDS = [
