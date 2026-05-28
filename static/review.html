@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChessMate &mdash; Review</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body data-theme="warm">
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="topbar-brand">
+          <a href="/" class="brand-link" title="Home">
+            <span class="brand-mark" aria-hidden="true">&#9818;</span>
+            <div class="brand-text">
+              <p class="eyebrow">ChessMate</p>
+              <h1 id="review-title">Game Review</h1>
+            </div>
+          </a>
+        </div>
+        <div class="topbar-actions">
+          <a href="/profile" class="ghost btn-link"><span class="btn-label">Back</span></a>
+          <select id="board-theme-picker" class="board-theme-picker" title="Board theme" aria-label="Board theme"></select>
+        </div>
+      </header>
+
+      <div class="layout review-layout">
+        <section class="play-area" aria-label="Chessboard">
+          <div class="player-card" id="player-top">
+            <div class="player-info">
+              <span class="player-dot black"></span>
+              <span class="player-name" id="name-top">Black</span>
+            </div>
+          </div>
+
+          <div id="board" class="board" aria-label="Chessboard">
+            <div class="squares-layer" id="squares-layer"></div>
+            <div class="pieces-layer" id="pieces-layer" aria-hidden="true"></div>
+            <div class="coords-files" id="coords-files"></div>
+            <div class="coords-ranks" id="coords-ranks"></div>
+          </div>
+
+          <div class="player-card" id="player-bottom">
+            <div class="player-info">
+              <span class="player-dot white"></span>
+              <span class="player-name" id="name-bottom">White</span>
+            </div>
+          </div>
+
+          <div class="review-nav">
+            <button id="nav-start" class="ghost" title="Go to start">⏮</button>
+            <button id="nav-prev"  class="ghost" title="Previous move">◀</button>
+            <span id="nav-status">0 / 0</span>
+            <button id="nav-next"  class="ghost" title="Next move">▶</button>
+            <button id="nav-end"   class="ghost" title="Go to end">⏭</button>
+            <button id="nav-flip"  class="ghost" title="Flip board">Flip</button>
+          </div>
+        </section>
+
+        <aside class="side-panel review-side" aria-label="Review">
+          <div class="panel-header">
+            <h2>Review</h2>
+            <span class="badge" id="review-summary-mini"></span>
+          </div>
+
+          <div class="review-info">
+            <p class="review-result" id="review-result">—</p>
+            <p class="review-meta"   id="review-meta">—</p>
+          </div>
+
+          <div class="analysis-panel" id="analysis-panel" hidden>
+            <div class="analysis-summary" id="analysis-summary"></div>
+            <div class="analysis-current" id="analysis-current"></div>
+          </div>
+
+          <div class="analyze-cta" id="analyze-cta">
+            <button id="analyze-btn" class="primary">Analyze game</button>
+            <p class="analyze-note">May take 10–30 seconds.</p>
+            <p class="analyze-progress" id="analyze-progress" hidden></p>
+          </div>
+
+          <ol class="moves-list review-moves" id="moves-list"></ol>
+        </aside>
+      </div>
+    </main>
+
+    <script src="/static/board-themes.js"></script>
+    <script src="/static/review.js" defer></script>
+  </body>
+</html>

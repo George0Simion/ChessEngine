@@ -135,11 +135,11 @@ def opponent(color: str) -> str:
 
 def normalize_square(square: str) -> str:
     if not isinstance(square, str):
-        raise InvalidMoveError("Coordonata trebuie sa fie text.")
+        raise InvalidMoveError("Square coordinate must be text.")
 
     normalized = square.strip().lower()
     if len(normalized) != 2 or normalized[0] not in FILES or normalized[1] not in RANKS:
-        raise InvalidMoveError(f"Coordonata invalida: {square!r}.")
+        raise InvalidMoveError(f"Invalid square: {square!r}.")
     return normalized
 
 
@@ -150,7 +150,7 @@ def square_to_coords(square: str) -> tuple[int, int]:
 
 def coords_to_square(file_index: int, rank_index: int) -> str:
     if not is_on_board(file_index, rank_index):
-        raise InvalidMoveError("Coordonata este in afara tablei.")
+        raise InvalidMoveError("Square is off the board.")
     return f"{FILES[file_index]}{RANKS[rank_index]}"
 
 
@@ -221,7 +221,7 @@ class ChessGame:
 
         ranks = board_str.split("/")
         if len(ranks) != 8:
-            raise InvalidMoveError(f"FEN board invalida: {board_str!r}")
+            raise InvalidMoveError(f"Invalid FEN board: {board_str!r}")
 
         board: dict[str, Piece] = {}
         for rank_idx, rank_str in enumerate(ranks):
@@ -235,7 +235,7 @@ class ChessGame:
                     board[FILES[file_idx] + str(rank_num)] = Piece(color, kind)
                     file_idx += 1
                 else:
-                    raise InvalidMoveError(f"Caracter FEN necunoscut: {ch!r}")
+                    raise InvalidMoveError(f"Unknown FEN character: {ch!r}")
 
         self.board = board
         self.turn = WHITE if color_str == "w" else BLACK
@@ -328,9 +328,9 @@ class ChessGame:
         origin = normalize_square(square)
         piece = self.board.get(origin)
         if piece is None:
-            raise InvalidMoveError("Nu exista piesa pe patratul selectat.")
+            raise InvalidMoveError("No piece on the selected square.")
         if piece.color != self.turn:
-            raise InvalidMoveError(f"Este randul pieselor {self._color_label(self.turn).lower()}.")
+            raise InvalidMoveError(f"It is {self._color_label(self.turn).lower()}'s turn.")
 
         candidates = self._candidate_moves(origin, piece)
         legal = [target for target in candidates if not self._move_leaves_king_in_check(origin, target)]
@@ -366,24 +366,24 @@ class ChessGame:
         destination = normalize_square(target)
 
         if source == destination:
-            raise InvalidMoveError("Alege un patrat diferit pentru mutare.")
+            raise InvalidMoveError("Pick a different target square.")
 
         piece = self.board.get(source)
         if piece is None:
-            raise InvalidMoveError("Nu exista piesa pe patratul de pornire.")
+            raise InvalidMoveError("No piece on the starting square.")
         if piece.color != self.turn:
-            raise InvalidMoveError(f"Este randul pieselor {self._color_label(self.turn).lower()}.")
+            raise InvalidMoveError(f"It is {self._color_label(self.turn).lower()}'s turn.")
 
         target_piece = self.board.get(destination)
         if target_piece is not None and target_piece.color == piece.color:
-            raise InvalidMoveError("Nu poti captura propria piesa.")
+            raise InvalidMoveError("Cannot capture your own piece.")
 
         candidates = self._candidate_moves(source, piece)
         if destination not in candidates:
-            raise InvalidMoveError("Mutarea nu este valida pentru piesa selectata.")
+            raise InvalidMoveError("That move is not legal for the selected piece.")
 
         if self._move_leaves_king_in_check(source, destination):
-            raise InvalidMoveError("Mutarea ar lasa regele in sah.")
+            raise InvalidMoveError("That move would leave the king in check.")
 
         record = self._apply_move(source, destination, piece, target_piece, promotion=promotion)
 
@@ -436,7 +436,7 @@ class ChessGame:
 
     def undo(self) -> dict[str, object]:
         if not self.history:
-            raise InvalidMoveError("Nu exista mutari de anulat.")
+            raise InvalidMoveError("No moves to undo.")
 
         record = self.history.pop()
         self._revert_move(record)
@@ -465,11 +465,11 @@ class ChessGame:
 
         piece = self.board.get(source)
         if piece is None or piece.color != self.turn:
-            raise InvalidMoveError("Mutare invalida pentru engine.")
+            raise InvalidMoveError("Invalid engine move.")
 
         target_piece = self.board.get(target)
         if target_piece is not None and target_piece.color == piece.color:
-            raise InvalidMoveError("Mutare invalida pentru engine.")
+            raise InvalidMoveError("Invalid engine move.")
 
         record = self._apply_move(source, target, piece, target_piece, promotion=promotion)
         self.history.append(record)
@@ -522,7 +522,7 @@ class ChessGame:
         if piece.kind == PAWN and self._is_promotion_rank(piece.color, destination):
             requested = (promotion or QUEEN).strip().lower()
             if requested not in PROMOTION_PIECES:
-                raise InvalidMoveError(f"Piesa de promovare invalida: {promotion!r}.")
+                raise InvalidMoveError(f"Invalid promotion piece: {promotion!r}.")
             promotion_kind = requested
 
         # Snapshot for undo BEFORE we mutate state.
@@ -669,7 +669,7 @@ class ChessGame:
                 (-1, 0), (1, 0), (0, -1), (0, 1),
             ])
 
-        raise InvalidMoveError(f"Tip de piesa necunoscut: {piece.kind}.")
+        raise InvalidMoveError(f"Unknown piece type: {piece.kind}.")
 
     def _pawn_moves(self, file_index: int, rank_index: int, color: str) -> list[str]:
         direction = 1 if color == WHITE else -1
@@ -1137,7 +1137,7 @@ class ChessGame:
             return "Albe"
         if color == BLACK:
             return "Negre"
-        raise InvalidMoveError(f"Culoare necunoscuta: {color}.")
+        raise InvalidMoveError(f"Unknown color: {color}.")
 
 
 def square_sort_key(square: str) -> tuple[int, int]:

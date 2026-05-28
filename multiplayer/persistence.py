@@ -49,11 +49,48 @@ def append_move(game_id: int, uci: str) -> None:
         session.commit()
 
 
-def set_game_result(game_id: int, status: str, winner: Optional[str]) -> None:
+# Raw ChessGame / room statuses -> (canonical status, result_reason).
+# Canonical status matches what /games/history expects:
+#   white_win | black_win | draw | aborted
+_REASON_BY_RAW = {
+    "checkmate":         "checkmate",
+    "stalemate":         "stalemate",
+    "draw_insufficient": "draw_insufficient",
+    "draw_fifty_move":   "draw_50_move",
+    "draw_repetition":   "draw_threefold",
+    "resign":            "resignation",
+    "timeout":           "timeout",
+    "abandoned":         "abandoned",
+}
+_DRAW_RAW = {"stalemate", "draw_insufficient", "draw_fifty_move", "draw_repetition", "draw"}
+
+
+def _canonical_status(raw: str, winner: Optional[str]) -> str:
+    """Translate a raw game/room status into the canonical status the rest of
+    the app (history, profile) understands."""
+    if raw in _DRAW_RAW:
+        return "draw"
+    if winner in ("white", "black"):
+        return f"{winner}_win"
+    if raw in ("white_win", "black_win", "draw", "aborted"):
+        return raw
+    return "aborted"
+
+
+def set_game_result(
+    game_id: int,
+    status: str,
+    winner: Optional[str],
+    reason: Optional[str] = None,
+) -> None:
     with SessionLocal() as session:
         game = session.get(Game, game_id)
         if not game:
             return
-        game.status = status
+        game.status = _canonical_status(status, winner)
         game.winner = winner
+        # "game_end" is a generic sentinel from the move flow — derive the real
+        # reason from the raw status instead of storing the placeholder.
+        derived = _REASON_BY_RAW.get(status)
+        game.result_reason = (reason if reason and reason != "game_end" else derived) or derived
         session.commit()

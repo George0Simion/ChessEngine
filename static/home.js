@@ -66,7 +66,6 @@ function updateChrome() {
     userNameEl.textContent = currentUser.username;
     userRatingEl.textContent = currentUser.rating ? `★ ${currentUser.rating}` : '';
     loginBtn.hidden = true;
-    logoutBtn.hidden = false;
     profileBtn.hidden = false;
     guestCard.hidden = true;
     profileCard.hidden = false;
@@ -77,7 +76,6 @@ function updateChrome() {
   } else {
     userChipEl.hidden = true;
     loginBtn.hidden = false;
-    logoutBtn.hidden = true;
     profileBtn.hidden = true;
     guestCard.hidden = false;
     profileCard.hidden = true;
@@ -221,7 +219,7 @@ document.querySelectorAll('.play-card.needs-auth').forEach((card) => {
 // ---------------------- Wire UI ----------------------
 
 loginBtn.addEventListener('click', () => { switchAuthTab('login'); showAuthModal(); });
-logoutBtn.addEventListener('click', performLogout);
+if (logoutBtn) logoutBtn.addEventListener('click', performLogout);
 profileBtn.addEventListener('click', () => { location.href = '/profile'; });
 guestLogin.addEventListener('click', () => { switchAuthTab('login'); showAuthModal(); });
 authModalClose.addEventListener('click', hideAuthModal);

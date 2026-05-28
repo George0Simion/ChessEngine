@@ -42,6 +42,15 @@ const REASON_LABEL = {
   draw_threefold: 'Threefold repetition',
   engine_error: 'Engine error', engine_illegal_move: 'Engine illegal move',
 };
+const MODE_LABEL = {
+  bot: 'Bot', online: 'Online', local: 'Local',
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
 
 function pillForResult(r) {
   const cls = r === 'win' ? 'win' : r === 'loss' ? 'loss' : r === 'draw' ? 'draw' : '';
@@ -49,7 +58,11 @@ function pillForResult(r) {
 }
 
 function renderHistory(games) {
-  if (!games || games.length === 0) {
+  // Only show real games: at least one move played. This drops empty/junk
+  // rows that never got off the ground.
+  const shown = (games || []).filter((g) => (g.moves_count || 0) > 0);
+
+  if (shown.length === 0) {
     historyEmpty.hidden = false;
     historyList.hidden  = true;
     return;
@@ -58,20 +71,34 @@ function renderHistory(games) {
   historyList.hidden  = false;
   historyList.innerHTML = '';
 
-  for (const g of games) {
+  for (const g of shown) {
     const li = document.createElement('li');
     li.className = 'history-item';
     const reason = g.result_reason ? (REASON_LABEL[g.result_reason] || g.result_reason) : '';
+    const modeLabel = MODE_LABEL[g.mode] || g.mode;
+    const colorLabel = g.user_color === 'white' ? 'White' : 'Black';
+    const opponent = escapeHtml(g.opponent || '—');
+    const isFinished = g.result !== 'in_progress';
+    const reviewHref = `/games/${g.id}/review`;
+    const analyzeHref = `/games/${g.id}/review?analyze=1`;
+    const analyzeLabel = g.analysis_ready ? 'View analysis' : 'Analyze';
+
     li.innerHTML = `
       <div class="hi-main">
-        <span class="hi-opp">${g.opponent}</span>
-        <span class="hi-color">as ${g.user_color}</span>
+        <span class="hi-mode">${modeLabel}</span>
+        <span class="hi-opp">${opponent}</span>
+        <span class="hi-color">as ${colorLabel}</span>
         ${pillForResult(g.result)}
       </div>
       <div class="hi-meta">
         <span>${g.moves_count} moves</span>
-        ${reason ? `<span>&middot; ${reason}</span>` : ''}
+        ${reason ? `<span>&middot; ${escapeHtml(reason)}</span>` : ''}
+        ${g.mode === 'bot' && g.bot_level ? `<span>&middot; Level ${g.bot_level}</span>` : ''}
         <span>&middot; ${fmtDate(g.created_at)}</span>
+      </div>
+      <div class="hi-actions">
+        <a class="ghost btn-link hi-btn" href="${reviewHref}">Review</a>
+        ${isFinished ? `<a class="ghost btn-link hi-btn analyze-btn" href="${analyzeHref}">${analyzeLabel}</a>` : ''}
       </div>
     `;
     historyList.appendChild(li);

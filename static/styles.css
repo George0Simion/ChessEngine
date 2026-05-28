@@ -1658,3 +1658,514 @@ button.ghost.danger:hover:not(:disabled) {
 .result-pill.loss { background: var(--danger-soft);       color: #e2a6a0; }
 .result-pill.draw { background: var(--accent-soft);       color: var(--accent-strong); }
 
+/* ============================================================
+   Retro enhancements — serif headings, aged paper texture,
+   ornamental borders, typewriter move numbers.
+   ============================================================ */
+
+/* Serif headings everywhere — gives the classic chess-magazine feel */
+h1, h2, h3,
+.hero-title,
+.brand-text h1,
+.modal h3,
+.panel-header h2,
+.card-eyebrow,
+.player-name {
+  font-family: Georgia, "Palatino Linotype", "Book Antiqua", Palatino, serif;
+  letter-spacing: 0.01em;
+}
+
+/* Brand mark & title */
+.brand-text h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+}
+.eyebrow {
+  font-family: Georgia, serif;
+  font-size: 0.65rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.9;
+}
+
+/* Hero section — aged-parchment texture strip */
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(236, 220, 184, 0.018) 3px,
+      rgba(236, 220, 184, 0.018) 4px
+    );
+}
+.hero-title {
+  font-weight: 700;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.hero-eyebrow {
+  font-family: Georgia, serif;
+  letter-spacing: 0.22em;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Board & panels — subtle inset frame lines */
+.side-panel {
+  border-left: 3px solid var(--accent);
+  border-left-color: rgba(176, 138, 68, 0.35);
+}
+.panel-header {
+  border-bottom: 2px solid var(--border-strong);
+}
+.panel-header h2 {
+  font-variant: small-caps;
+  font-size: 0.82rem;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+}
+
+/* Move list — typewriter numbers, clean rows */
+.moves-list {
+  font-family: "Courier New", Courier, ui-monospace, monospace;
+}
+.moves-list .ply-num {
+  font-family: Georgia, serif;
+  font-size: 0.78rem;
+  color: var(--accent);
+  opacity: 0.75;
+  text-align: right;
+  padding-right: 4px;
+}
+.moves-list li:nth-child(even) {
+  background: rgba(236, 220, 184, 0.022);
+}
+.moves-list .ply.latest {
+  background: rgba(176, 138, 68, 0.22);
+  color: #e8c97a;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgba(176, 138, 68, 0.3);
+}
+
+/* Player cards — ornamental rule above name */
+.player-card {
+  position: relative;
+}
+.player-name {
+  font-size: 0.92rem;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+}
+
+/* Modals — aged wooden frame look */
+.modal {
+  border-top: 3px solid var(--accent);
+  border-top-color: rgba(176, 138, 68, 0.55);
+}
+.modal h3 {
+  font-variant: small-caps;
+  letter-spacing: 0.08em;
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Home cards — thicker accent top border */
+.home-card,
+.play-card {
+  border-top: 2px solid rgba(176, 138, 68, 0.28);
+}
+.play-card.primary-card {
+  border-top-color: var(--accent);
+}
+.play-card h3,
+.home-card h3 {
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+/* Footer — centered, tasteful */
+.home-footer {
+  font-family: Georgia, serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  text-align: center;
+  padding: 18px 0 10px;
+  border-top: 1px solid var(--border);
+}
+
+/* Buttons — subtle inset for "pressed" feel */
+button.ghost {
+  font-family: Georgia, serif;
+  font-size: 0.84rem;
+  font-variant: small-caps;
+  letter-spacing: 0.04em;
+}
+button.primary {
+  font-family: Georgia, serif;
+  font-variant: small-caps;
+  letter-spacing: 0.06em;
+}
+
+/* Mode tiles — more ornate selection state */
+.mode-tile.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent),
+              0 0 12px rgba(176, 138, 68, 0.15);
+}
+.mode-tile .mode-name {
+  font-family: Georgia, serif;
+  font-variant: small-caps;
+  letter-spacing: 0.05em;
+}
+
+/* Subtle diagonal hatching texture on the dark background */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 40px,
+      rgba(236, 220, 184, 0.012) 40px,
+      rgba(236, 220, 184, 0.012) 41px
+    );
+}
+.app-shell, .home-shell { position: relative; z-index: 1; }
+
+/* ============================================================
+   Final retro polish — less SaaS, more tournament-room feel.
+   ============================================================ */
+
+/* Tighter, less glowy buttons */
+button.primary {
+  padding: 7px 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+button.ghost {
+  padding: 6px 12px;
+  border-radius: 4px;
+  box-shadow: none;
+}
+.btn-link { padding: 6px 12px; border-radius: 4px; }
+
+/* Less blur, softer modal shadow */
+.modal-backdrop { backdrop-filter: none; background: rgba(0, 0, 0, 0.55); }
+.modal {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  border-radius: 6px;
+}
+
+/* Flatten cards: solid panel, thin border */
+.play-card, .home-card {
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: none;
+}
+.play-card.primary-card {
+  background: var(--panel);
+}
+.play-card:hover {
+  background: var(--panel-elevated);
+  box-shadow: none;
+  transform: none;
+}
+.home-card {
+  background: var(--panel);
+}
+
+/* Hero: drop the radial gradient pop */
+.hero {
+  background: var(--panel);
+}
+.hero::after { display: none; }
+
+/* Restore the recognizable brass-tile-with-king badge (the old logo). */
+.brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: #1c1206;
+  display: grid;
+  place-items: center;
+  font-size: 26px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.40),
+              inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  text-shadow: none;
+}
+.brand-mark.auth-logo {
+  width: 48px;
+  height: 48px;
+  font-size: 30px;
+}
+
+/* Side panel: remove the heavy left accent strip */
+.side-panel { border-left-width: 1px; border-left-color: var(--border-strong); }
+
+/* Tighter app/home spacing */
+.app-shell { gap: 16px; padding: 18px clamp(12px, 2.5vw, 24px); }
+.home-shell { gap: 16px; }
+
+/* ============================================================
+   Profile history additions: mode chip + action buttons row.
+   ============================================================ */
+.history-item .hi-mode {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: rgba(176, 138, 68, 0.14);
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: Georgia, serif;
+}
+.history-item .hi-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.hi-btn {
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border: 1px solid var(--border-strong);
+  color: var(--ink-soft);
+  border-radius: 3px;
+}
+.hi-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.hi-btn.analyze-btn {
+  border-color: rgba(176, 138, 68, 0.45);
+  color: var(--accent-strong);
+}
+
+/* ============================================================
+   Review page layout.
+   ============================================================ */
+.review-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 18px;
+}
+@media (max-width: 880px) {
+  .review-layout { grid-template-columns: 1fr; }
+}
+
+.review-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  margin-top: 6px;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+}
+.review-nav button {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+}
+.review-nav #nav-status {
+  margin: 0 8px;
+  font-family: "Courier New", monospace;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+  flex: 1;
+  text-align: center;
+}
+
+.review-side .panel-header { border-bottom: 1px solid var(--border-strong); }
+.review-info {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.review-result {
+  margin: 0 0 4px;
+  font-family: Georgia, serif;
+  font-variant: small-caps;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+.review-meta {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+/* Move list interactive cells */
+.review-ply {
+  cursor: pointer;
+}
+.review-ply:hover { background: var(--accent-soft); }
+.review-ply.current {
+  background: rgba(176, 138, 68, 0.30);
+  color: #f1d792;
+  box-shadow: inset 0 0 0 1px rgba(176, 138, 68, 0.55);
+  border-radius: 3px;
+}
+
+/* Last-move square highlights on the review board */
+.square.last-from,
+.square.last-to {
+  background: linear-gradient(rgba(176, 138, 68, 0.30), rgba(176, 138, 68, 0.30)),
+              var(--light-square);
+}
+.square.dark.last-from,
+.square.dark.last-to {
+  background: linear-gradient(rgba(176, 138, 68, 0.35), rgba(176, 138, 68, 0.35)),
+              var(--dark-square);
+}
+
+/* ============================================================
+   Move category pills + analysis panel.
+   ============================================================ */
+.move-cat-pill {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-family: Georgia, serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.move-cat-pill.cat-best       { background: rgba(104, 128, 70, 0.20); color: #b8d391; }
+.move-cat-pill.cat-excellent  { background: rgba(104, 128, 70, 0.14); color: #aac687; }
+.move-cat-pill.cat-good       { background: rgba(176, 138, 68, 0.12); color: var(--accent-strong); }
+.move-cat-pill.cat-inaccuracy { background: rgba(176, 138, 68, 0.18); color: #d9b06a; }
+.move-cat-pill.cat-mistake    { background: rgba(156, 100, 60, 0.22); color: #e8a973; }
+.move-cat-pill.cat-blunder    { background: var(--danger-soft);       color: #e2a6a0; }
+.move-cat-pill.cat-brilliant  { background: rgba(140, 100, 200, 0.22); color: #d2bef0; }
+
+.analyze-cta {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+}
+.analyze-cta button.primary { padding: 7px 16px; font-size: 0.86rem; }
+.analyze-note {
+  margin: 6px 0 0;
+  font-size: 0.72rem;
+  color: var(--ink-muted);
+}
+.analyze-progress {
+  margin: 6px 0 0;
+  font-size: 0.82rem;
+  color: var(--accent-strong);
+  font-family: Georgia, serif;
+  font-variant: small-caps;
+}
+
+.analysis-panel {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.analysis-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cat-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 0.72rem;
+  font-family: Georgia, serif;
+  border: 1px solid var(--border-strong);
+}
+.cat-stat-n { font-weight: 700; font-size: 0.86rem; }
+.cat-stat-l { color: var(--ink-muted); letter-spacing: 0.04em; text-transform: uppercase; font-size: 0.66rem; }
+.cat-stat.cat-best       { border-color: rgba(104, 128, 70, 0.40); }
+.cat-stat.cat-blunder    { border-color: rgba(156, 77, 68, 0.55); }
+.cat-stat.cat-brilliant  { border-color: rgba(140, 100, 200, 0.50); }
+
+.analysis-current .ac-played {
+  margin: 0 0 6px;
+  font-family: Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+.analysis-current .ac-num { color: var(--ink-muted); margin-right: 4px; }
+.analysis-current .ac-san { color: var(--ink); margin-right: 4px; }
+.analysis-current .ac-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0;
+  font-size: 0.82rem;
+}
+.analysis-current .ac-key {
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  font-family: Georgia, serif;
+}
+.analysis-current .ac-val { color: var(--ink); text-align: right; }
+.analysis-current .ac-val.mono { font-family: "Courier New", monospace; font-size: 0.78rem; }
+.analysis-empty { color: var(--ink-muted); font-size: 0.82rem; margin: 0; }
+
+/* ============================================================
+   Compact mode — when the modal hides the tile picker.
+   ============================================================ */
+.mode-modal #mode-choices[hidden] { display: none; }
+
+/* ============================================================
+   End-of-game CTAs (side panel) + modal action wrapping.
+   ============================================================ */
+.end-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 18px 4px;
+  padding: 12px 14px;
+  background: var(--panel-elevated);
+  border: 1px solid var(--border-strong);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--radius-sm);
+}
+.end-actions[hidden] { display: none; }
+.end-action-btn {
+  width: 100%;
+  text-align: center;
+  padding: 8px 12px;
+}
+
+/* Let the end-game modal's button row wrap cleanly with 3-4 buttons. */
+.endgame-actions {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}

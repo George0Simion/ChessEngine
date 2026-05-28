@@ -2,26 +2,49 @@
 
 Endpoints (all require Authorization: Bearer <jwt>):
 
-    POST /games/bot                 - create a new bot game
-    GET  /games/<game_id>           - read state
-    POST /games/<game_id>/move      - submit a move (auto-plays the bot's reply)
-    POST /games/<game_id>/resign    - resign the game
+    POST /games/bot                  - create a new bot game
+    GET  /games/<game_id>            - read state
+    POST /games/<game_id>/move       - submit a move (auto-plays the bot's reply)
+    POST /games/<game_id>/resign     - resign the game
+    GET  /games/history              - list user's games (newest first)
+    POST /games/record               - persist a finished legacy bot game
+    GET  /games/<game_id>/review-data  - moves + FENs for replay UI
+    POST /games/<game_id>/analyze    - run engine analysis on every ply
+    GET  /games/<game_id>/analysis   - return cached analysis if present
 """
 
 from __future__ import annotations
+import json
+import os
 import random
 from datetime import datetime
 from typing import Optional, Tuple
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 
 from auth import token_required
-from models import db, Game
+from models import db, Game, User
 
 from backend import engine_client
 
 
 games_bp = Blueprint('games', __name__, url_prefix='/games')
+
+
+BOT_NAMES = {
+    1: "Andreea Botez",
+    2: "Anna Cramling",
+    3: "GothamChess",
+    4: "Magnus Carlsen",
+}
+
+
+def _analysis_path(game_id: int) -> str:
+    """Path to the cached analysis JSON for `game_id`."""
+    instance_dir = current_app.instance_path if current_app else "instance"
+    dir_path = os.path.join(instance_dir, "analyses")
+    os.makedirs(dir_path, exist_ok=True)
+    return os.path.join(dir_path, f"{game_id}.json")
 
 
 # ---------------------------------------------------------------------------
@@ -61,9 +84,15 @@ def _is_bot_turn(game: Game) -> bool:
 
 
 def _moves_list(game: Game) -> list:
-    if not game.moves_history:
+    """Return the game's UCI moves as a list.
+
+    Bot games store moves space-separated; the multiplayer flow stores them
+    comma-separated. Normalize both so review/history always see every move.
+    """
+    raw = game.moves_history or ""
+    if not raw.strip():
         return []
-    return game.moves_history.split()
+    return raw.replace(",", " ").split()
 
 
 def _append_move(game: Game, uci: str) -> None:
@@ -322,15 +351,28 @@ def history(current_user):
             .limit(100)
             .all())
 
+    # Pre-fetch all opponent usernames in one query.
+    opp_ids = set()
+    for g in rows:
+        is_white = (g.white_id == current_user.id)
+        opp_id = g.black_id if is_white else g.white_id
+        if opp_id is not None:
+            opp_ids.add(opp_id)
+    usernames = {}
+    if opp_ids:
+        for u in User.query.filter(User.id.in_(opp_ids)).all():
+            usernames[u.id] = u.username
+
     out = []
     for g in rows:
         user_color = "white" if g.white_id == current_user.id else "black"
         opp_is_bot = g.black_is_bot if user_color == "white" else g.white_is_bot
+        opp_id = g.black_id if user_color == "white" else g.white_id
         if opp_is_bot:
-            opponent = f"Bot level {g.bot_level or 3}"
+            opponent = BOT_NAMES.get(g.bot_level or 3, "Magnus Carlsen")
             mode = "bot"
         else:
-            opponent = "Online"
+            opponent = usernames.get(opp_id) or "Online"
             mode = "online"
 
         if g.status == "active":
@@ -344,19 +386,23 @@ def history(current_user):
         else:
             result = "loss"
 
-        moves_count = len((g.moves_history or "").split())
+        moves = (g.moves_history or "").split()
+        analysis_ready = os.path.isfile(_analysis_path(g.id))
 
         out.append({
-            "id":            g.id,
-            "mode":          mode,
-            "opponent":      opponent,
-            "user_color":    user_color,
-            "result":        result,
-            "result_reason": g.result_reason,
-            "moves_count":   moves_count,
-            "bot_level":     g.bot_level,
-            "created_at":    g.created_at.isoformat() if g.created_at else None,
-            "updated_at":    g.updated_at.isoformat() if g.updated_at else None,
+            "id":             g.id,
+            "mode":           mode,
+            "opponent":       opponent,
+            "user_color":     user_color,
+            "status":         g.status,
+            "result":         result,
+            "result_reason":  g.result_reason,
+            "moves_count":    len(moves),
+            "moves":          moves,
+            "bot_level":      g.bot_level,
+            "analysis_ready": bool(analysis_ready),
+            "created_at":     g.created_at.isoformat() if g.created_at else None,
+            "updated_at":     g.updated_at.isoformat() if g.updated_at else None,
         })
 
     return jsonify({"ok": True, "games": out})
@@ -441,3 +487,284 @@ def resign(current_user, game_id):
     db.session.commit()
 
     return jsonify({"ok": True, **_serialize(game, user_color=user_color)})
+
+
+# ---------------------------------------------------------------------------
+# Review & Analysis
+# ---------------------------------------------------------------------------
+def _game_player_names(game: Game) -> Tuple[str, str]:
+    """Return (white_name, black_name) for display."""
+    white = "White"
+    black = "Black"
+    if game.white_is_bot:
+        white = BOT_NAMES.get(game.bot_level or 3, "Bot")
+    elif game.white_id is not None:
+        u = User.query.get(game.white_id)
+        if u:
+            white = u.username
+    if game.black_is_bot:
+        black = BOT_NAMES.get(game.bot_level or 3, "Bot")
+    elif game.black_id is not None:
+        u = User.query.get(game.black_id)
+        if u:
+            black = u.username
+    return white, black
+
+
+def _replay_game(moves: list) -> dict:
+    """Replay UCI moves through ChessGame to capture FENs + SANs for each ply."""
+    from chessmate.core import ChessGame, InvalidMoveError
+    game = ChessGame()
+    starting_fen = game.to_fen()
+    plies = []
+    for i, uci in enumerate(moves):
+        if not uci or len(uci) < 4:
+            continue
+        origin, target = uci[:2], uci[2:4]
+        promo_ch = uci[4] if len(uci) >= 5 else None
+        promo_kind = {"q": "queen", "r": "rook", "b": "bishop", "n": "knight"}.get(promo_ch)
+        fen_before = game.to_fen()
+        color = game.turn
+        try:
+            game.move(origin, target, promotion=promo_kind)
+        except InvalidMoveError as e:
+            return {
+                "ok": False, "error": f"Move {i+1} ({uci}): {e}",
+                "starting_fen": starting_fen, "plies": plies,
+            }
+        rec = game.history[-1]
+        plies.append({
+            "ply":         i + 1,
+            "color":       color,
+            "uci":         uci,
+            "san":         rec.san,
+            "fen_before":  fen_before,
+            "fen_after":   game.to_fen(),
+        })
+    return {"ok": True, "starting_fen": starting_fen, "plies": plies}
+
+
+@games_bp.get('/<int:game_id>/review-data')
+@token_required
+def review_data(current_user, game_id):
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({"ok": False, "error": "game not found"}), 404
+    user_color = _user_color_for(game, current_user.id)
+    if user_color is None:
+        return jsonify({"ok": False, "error": "not your game"}), 403
+
+    moves = _moves_list(game)
+    replay = _replay_game(moves)
+    white_name, black_name = _game_player_names(game)
+
+    return jsonify({
+        "ok": replay["ok"],
+        "error": replay.get("error"),
+        "meta": {
+            "id":            game.id,
+            "mode":          "bot" if (game.white_is_bot or game.black_is_bot) else "online",
+            "white_name":    white_name,
+            "black_name":    black_name,
+            "user_color":    user_color,
+            "status":        game.status,
+            "result_reason": game.result_reason,
+            "bot_level":     game.bot_level,
+            "created_at":    game.created_at.isoformat() if game.created_at else None,
+        },
+        "starting_fen":   replay["starting_fen"],
+        "plies":          replay["plies"],
+        "analysis_ready": os.path.isfile(_analysis_path(game_id)),
+    })
+
+
+@games_bp.post('/replay')
+def replay_adhoc():
+    """Stateless replay for games that are NOT persisted (e.g. local 1v1).
+
+    Body: { "moves": ["e2e4", ...], "meta": { ...optional display fields } }
+    Returns the same shape as /review-data so the review page can render it.
+    No auth: local games can be played by guests.
+    """
+    data = request.get_json(silent=True) or {}
+    moves = data.get("moves") or []
+    if not isinstance(moves, list):
+        return jsonify({"ok": False, "error": "moves must be a list"}), 400
+    meta_in = data.get("meta") or {}
+
+    replay = _replay_game([str(m) for m in moves])
+    return jsonify({
+        "ok": replay["ok"],
+        "error": replay.get("error"),
+        "meta": {
+            "id":            None,
+            "mode":          "local",
+            "white_name":    meta_in.get("white_name") or "White",
+            "black_name":    meta_in.get("black_name") or "Black",
+            "user_color":    meta_in.get("user_color") or "white",
+            "status":        meta_in.get("status") or "",
+            "result_reason": meta_in.get("result_reason"),
+            "bot_level":     None,
+            "created_at":    None,
+        },
+        "starting_fen": replay["starting_fen"],
+        "plies":        replay["plies"],
+        "analysis_ready": False,
+    })
+
+
+# ---------- Analysis ----------
+
+_CATEGORY_THRESHOLDS = [
+    (10,  "Best"),
+    (25,  "Excellent"),
+    (60,  "Good"),
+    (120, "Inaccuracy"),
+    (250, "Mistake"),
+]
+
+
+def _categorize(cp_loss: int) -> str:
+    for threshold, label in _CATEGORY_THRESHOLDS:
+        if cp_loss <= threshold:
+            return label
+    return "Blunder"
+
+
+_MATE_LARGE = 30_000
+
+
+def _eval_to_cp(eval_dict: dict) -> int:
+    """Translate `best_move` result (`{score_cp, mate}`) into a comparable cp value.
+    Mate scores are clamped to ±_MATE_LARGE so arithmetic doesn't overflow."""
+    if eval_dict.get("mate") is not None:
+        mate = eval_dict["mate"]
+        return _MATE_LARGE - abs(mate) * 10 if mate > 0 else -(_MATE_LARGE - abs(mate) * 10)
+    return int(eval_dict.get("score_cp") or 0)
+
+
+def _material_value(fen: str) -> int:
+    val = {"p": 1, "n": 3, "b": 3, "r": 5, "q": 9}
+    placement = fen.split()[0]
+    score = 0
+    for ch in placement:
+        lo = ch.lower()
+        if lo in val:
+            score += val[lo] if ch.isupper() else -val[lo]
+    return score
+
+
+def _is_sacrifice(played_color: str, fen_before: str, fen_after: str) -> bool:
+    delta = _material_value(fen_after) - _material_value(fen_before)
+    return delta <= -2 if played_color == "white" else delta >= 2
+
+
+def _run_analysis(plies: list, time_ms: int = 350, max_depth: int = 8) -> dict:
+    from engine import api as engine_api
+
+    moves_out = []
+    summary = {k: 0 for k in
+               ["Best", "Excellent", "Good", "Inaccuracy", "Mistake", "Blunder", "Brilliant"]}
+
+    for p in plies:
+        fen_before = p["fen_before"]
+        fen_after  = p["fen_after"]
+        played_uci = p["uci"]
+        color      = p["color"]
+
+        best = engine_api.best_move(
+            fen_before, time_ms=time_ms, max_depth=max_depth, use_book=False,
+        )
+        after_search = engine_api.best_move(
+            fen_after, time_ms=max(150, time_ms // 2), max_depth=max_depth,
+            use_book=False,
+        )
+
+        eval_before = _eval_to_cp(best)
+        eval_after_mover = -_eval_to_cp(after_search)
+        cp_loss = max(0, eval_before - eval_after_mover)
+
+        if played_uci == best.get("move"):
+            category = "Best"
+        else:
+            category = _categorize(cp_loss)
+
+        best_mate  = best.get("mate")
+        after_mate = after_search.get("mate")
+        if best_mate is not None and best_mate > 0:
+            if played_uci != best.get("move") and (after_mate is None or after_mate >= 0):
+                category = "Blunder"
+        if after_mate is not None and after_mate < 0 and (best_mate is None or best_mate <= 0):
+            category = "Brilliant"
+
+        if (category in ("Best", "Excellent")
+                and played_uci != best.get("move")
+                and _is_sacrifice(color, fen_before, fen_after)
+                and cp_loss <= 25):
+            category = "Brilliant"
+
+        summary[category] = summary.get(category, 0) + 1
+
+        moves_out.append({
+            "ply":         p["ply"],
+            "color":       color,
+            "uci":         played_uci,
+            "san":         p.get("san", ""),
+            "fen_before":  fen_before,
+            "fen_after":   fen_after,
+            "best_move":   best.get("move"),
+            "best_line":   best.get("pv") or [],
+            "eval_before": eval_before if abs(eval_before) < _MATE_LARGE - 1000 else None,
+            "eval_after":  eval_after_mover if abs(eval_after_mover) < _MATE_LARGE - 1000 else None,
+            "cp_loss":     cp_loss if abs(eval_before) < _MATE_LARGE - 1000 else None,
+            "mate_before": best_mate,
+            "mate_after":  -after_mate if after_mate is not None else None,
+            "category":    category,
+        })
+
+    return {"ok": True, "moves": moves_out, "summary": summary}
+
+
+@games_bp.post('/<int:game_id>/analyze')
+@token_required
+def analyze(current_user, game_id):
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({"ok": False, "error": "game not found"}), 404
+    if _user_color_for(game, current_user.id) is None:
+        return jsonify({"ok": False, "error": "not your game"}), 403
+
+    force = (request.args.get("force") or "").strip() in ("1", "true", "yes")
+    cache_path = _analysis_path(game_id)
+    if not force and os.path.isfile(cache_path):
+        with open(cache_path) as f:
+            return jsonify(json.load(f))
+
+    moves = _moves_list(game)
+    if not moves:
+        return jsonify({"ok": False, "error": "game has no moves"}), 400
+
+    replay = _replay_game(moves)
+    if not replay["ok"]:
+        return jsonify({"ok": False, "error": replay.get("error") or "replay failed"}), 400
+
+    result = _run_analysis(replay["plies"])
+    result["game_id"] = game_id
+    with open(cache_path, "w") as f:
+        json.dump(result, f)
+    return jsonify(result)
+
+
+@games_bp.get('/<int:game_id>/analysis')
+@token_required
+def get_analysis(current_user, game_id):
+    game = Game.query.get(game_id)
+    if not game:
+        return jsonify({"ok": False, "error": "game not found"}), 404
+    if _user_color_for(game, current_user.id) is None:
+        return jsonify({"ok": False, "error": "not your game"}), 403
+    cache_path = _analysis_path(game_id)
+    if not os.path.isfile(cache_path):
+        return jsonify({"ok": False, "error": "not_analyzed_yet"}), 404
+    with open(cache_path) as f:
+        return jsonify(json.load(f))

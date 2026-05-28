@@ -30,9 +30,6 @@
           <button id="login-shortcut" type="button" class="ghost" title="Login" hidden>
             <span class="btn-label">Login</span>
           </button>
-          <button id="logout-button" type="button" class="ghost" title="Logout" hidden>
-            <span class="btn-label">Logout</span>
-          </button>
           <button id="mode-button" type="button" class="ghost" title="Change game mode">
             <span class="btn-label" id="mode-button-label">Local</span>
           </button>
@@ -124,6 +121,13 @@
             </div>
           </div>
 
+          <!-- End-of-game actions (shown when a bot/local game finishes) -->
+          <div class="end-actions" id="end-actions" hidden>
+            <button type="button" class="primary end-action-btn" id="side-review">Review Game</button>
+            <button type="button" class="ghost end-action-btn" id="side-analyze">Analyze Game</button>
+            <button type="button" class="ghost end-action-btn" id="side-newgame">New Game</button>
+          </div>
+
           <!-- Puzzle info card (visible only in puzzle mode) -->
           <div class="puzzle-info" id="puzzle-info" hidden>
             <div class="puzzle-info-header">
@@ -176,7 +180,7 @@
           <button type="button" class="mode-tile" data-mode="vs_bot">
             <div class="mode-icon" aria-hidden="true">&#9822;</div>
             <div class="mode-name">Play Bot</div>
-            <div class="mode-desc">In-house engine, four levels.</div>
+            <div class="mode-desc">Strong engine, four levels.</div>
           </button>
           <button type="button" class="mode-tile" data-mode="multiplayer">
             <div class="mode-icon" aria-hidden="true">&#9820;</div>
@@ -258,9 +262,11 @@
         <div class="endgame-icon" id="endgame-icon" aria-hidden="true">&#9812;</div>
         <h3 id="endgame-title">Game over</h3>
         <p class="modal-text" id="endgame-text">White wins.</p>
-        <div class="modal-actions">
+        <div class="modal-actions endgame-actions">
           <button type="button" class="ghost" id="endgame-close">View board</button>
-          <button type="button" class="primary" id="endgame-reset">New game</button>
+          <button type="button" class="ghost" id="endgame-review" hidden>Review Game</button>
+          <button type="button" class="ghost" id="endgame-analyze" hidden>Analyze Game</button>
+          <button type="button" class="primary" id="endgame-reset">New Game</button>
         </div>
       </div>
     </div>

@@ -216,7 +216,7 @@ class Room:
             end_state["status"] = status
             end_state["winner"] = winner
             end_state["winnerLabel"] = (
-                "Albe" if winner == WHITE else "Negre" if winner == BLACK else None
+                "White" if winner == WHITE else "Black" if winner == BLACK else None
             )
             payload = {
                 "type": "game_over",
@@ -227,7 +227,7 @@ class Room:
                 "state": end_state,
                 "clock": self.clock_payload(update=False),
             }
-        await asyncio.to_thread(set_game_result, self.game_id, status, winner)
+        await asyncio.to_thread(set_game_result, self.game_id, status, winner, reason)
         await self._broadcast(payload)
         if self.on_end:
             await self.on_end(self)

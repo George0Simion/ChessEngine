@@ -120,6 +120,16 @@ def create_app() -> Flask:
     def profile_page():
         return send_from_directory(app.static_folder, "profile.html")
 
+    # Game review page (auth-gated client-side; the backend endpoints enforce ownership).
+    @app.get("/games/<int:game_id>/review")
+    def review_page(game_id):
+        return send_from_directory(app.static_folder, "review.html")
+
+    # Local (unsaved) game review — moves come from the client via sessionStorage.
+    @app.get("/review")
+    def review_local_page():
+        return send_from_directory(app.static_folder, "review.html")
+
     # Backwards compat: the old /bot path used to serve a separate page.
     @app.get("/bot")
     def bot_redirect():
@@ -165,7 +175,7 @@ def create_app() -> Flask:
         if session.mode == MODE_MULTIPLAYER:
             return jsonify({
                 "ok": False,
-                "error": "Multiplayer foloseste WebSocket pentru mutari.",
+                "error": "Multiplayer uses WebSocket for moves.",
                 "moves": [],
                 "state": _state_with_session(session),
             }), 400
@@ -195,7 +205,7 @@ def create_app() -> Flask:
         if session.mode == MODE_MULTIPLAYER:
             return jsonify({
                 "ok": False,
-                "error": "Mutarile multiplayer se trimit prin WebSocket.",
+                "error": "Multiplayer moves are sent via WebSocket.",
                 "state": _state_with_session(session),
             }), 400
 
@@ -203,7 +213,7 @@ def create_app() -> Flask:
         if session.mode == MODE_VS_BOT and session.bot_color == session.game.turn:
             return jsonify({
                 "ok": False,
-                "error": "Este randul botului — foloseste /api/bot_move.",
+                "error": "It's the bot's turn — use /api/bot_move.",
                 "state": _state_with_session(session),
             }), 400
 
@@ -235,14 +245,14 @@ def create_app() -> Flask:
         if session.mode != MODE_VS_BOT:
             return jsonify({
                 "ok": False,
-                "error": "Modul curent nu are bot activ.",
+                "error": "No bot is active in the current mode.",
                 "state": _state_with_session(session),
             }), 400
 
         if session.bot_color != session.game.turn:
             return jsonify({
                 "ok": False,
-                "error": "Nu este randul botului.",
+                "error": "It's not the bot's turn.",
                 "state": _state_with_session(session),
             }), 400
 
@@ -250,7 +260,7 @@ def create_app() -> Flask:
         if session.game.state().get("status") != "active":
             return jsonify({
                 "ok": False,
-                "error": "Partida s-a terminat.",
+                "error": "The game has ended.",
                 "state": _state_with_session(session),
             }), 400
 
@@ -273,7 +283,7 @@ def create_app() -> Flask:
         except (InvalidMoveError, RuntimeError) as exc:
             return jsonify({
                 "ok": False,
-                "error": f"Botul nu a putut muta: {exc}",
+                "error": f"The bot could not move: {exc}",
                 "state": _state_with_session(session),
             }), 500
 
@@ -296,13 +306,13 @@ def create_app() -> Flask:
         bot_color = payload.get("botColor")
 
         if mode not in VALID_MODES:
-            return jsonify({"ok": False, "error": f"Mod necunoscut: {mode!r}."}), 400
+            return jsonify({"ok": False, "error": f"Unknown mode: {mode!r}."}), 400
 
         if mode == MODE_VS_BOT:
             if bot_color not in {"white", "black"}:
                 return jsonify({
                     "ok": False,
-                    "error": "botColor trebuie sa fie 'white' sau 'black'.",
+                    "error": "botColor must be 'white' or 'black'.",
                 }), 400
             level_raw = payload.get("level", 3)
             try:
@@ -326,7 +336,7 @@ def create_app() -> Flask:
         if session.mode == MODE_MULTIPLAYER:
             return jsonify({
                 "ok": False,
-                "error": "Undo nu este disponibil in multiplayer.",
+                "error": "Undo is not available in multiplayer.",
                 "state": _state_with_session(session),
             }), 400
         try:
@@ -356,7 +366,7 @@ def create_app() -> Flask:
         if session.mode == MODE_MULTIPLAYER:
             return jsonify({
                 "ok": False,
-                "error": "Resetul multiplayer se face prin WebSocket.",
+                "error": "Multiplayer reset is done via WebSocket.",
                 "state": _state_with_session(session),
             }), 400
         """Reset the board, keeping the current mode/bot settings."""
@@ -370,7 +380,7 @@ def create_app() -> Flask:
     @app.get("/api/puzzle/moves")
     def puzzle_moves():
         if puzzle_session is None:
-            return jsonify({"ok": False, "error": "Niciun puzzle activ.", "moves": []}), 404
+            return jsonify({"ok": False, "error": "No puzzle is active.", "moves": []}), 404
         origin = request.args.get("from", "")
         try:
             return jsonify({
@@ -390,9 +400,9 @@ def create_app() -> Flask:
     @app.get("/api/puzzle/hint")
     def puzzle_hint():
         if puzzle_session is None:
-            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+            return jsonify({"ok": False, "error": "No puzzle is active."}), 404
         if puzzle_session.is_complete():
-            return jsonify({"ok": False, "error": "Puzzle-ul este deja rezolvat."}), 400
+            return jsonify({"ok": False, "error": "The puzzle is already solved."}), 400
         uci = puzzle_session.solution_moves[puzzle_session.current_step]
         return jsonify({
             "ok": True,
@@ -419,25 +429,25 @@ def create_app() -> Flask:
 
         puzzle_data = loader.get_random(theme)
         if puzzle_data is None:
-            return jsonify({"ok": False, "error": "Nu s-a găsit niciun puzzle."}), 404
+            return jsonify({"ok": False, "error": "No puzzle found."}), 404
 
         try:
             puzzle_session = PuzzleSession(puzzle_data)
         except Exception as exc:
-            return jsonify({"ok": False, "error": f"Eroare la încărcarea puzzle-ului: {exc}"}), 500
+            return jsonify({"ok": False, "error": f"Failed to load puzzle: {exc}"}), 500
 
         return jsonify({"ok": True, "state": puzzle_session.get_state()})
 
     @app.get("/api/puzzle/state")
     def puzzle_state_endpoint():
         if puzzle_session is None:
-            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+            return jsonify({"ok": False, "error": "No puzzle is active."}), 404
         return jsonify({"ok": True, "state": puzzle_session.get_state()})
 
     @app.post("/api/puzzle/move")
     def puzzle_move():
         if puzzle_session is None:
-            return jsonify({"ok": False, "error": "Niciun puzzle activ."}), 404
+            return jsonify({"ok": False, "error": "No puzzle is active."}), 404
 
         body = request.get_json(silent=True) or {}
         from_sq = body.get("from", "")
@@ -459,9 +469,9 @@ def _state_with_session(session: GameSession) -> dict:
 
 def _puzzle_unavailable_msg() -> str:
     return (
-        "Baza de date de puzzle-uri nu este disponibilă. "
-        "Descarcă fișierul CSV de pe Kaggle și setează "
-        "variabila de mediu PUZZLE_CSV_PATH cu calea către el."
+        "The puzzle database is not available. "
+        "Download the CSV file from Kaggle and set "
+        "PUZZLE_CSV_PATH to its path."
     )
 
 

@@ -72,6 +72,12 @@ const endgameText = document.querySelector("#endgame-text");
 const endgameIcon = document.querySelector("#endgame-icon");
 const endgameClose = document.querySelector("#endgame-close");
 const endgameReset = document.querySelector("#endgame-reset");
+const endgameReview = document.querySelector("#endgame-review");
+const endgameAnalyze = document.querySelector("#endgame-analyze");
+const endActions = document.querySelector("#end-actions");
+const sideReview = document.querySelector("#side-review");
+const sideAnalyze = document.querySelector("#side-analyze");
+const sideNewGame = document.querySelector("#side-newgame");
 const modeModal = document.querySelector("#mode-modal");
 const modeChoicesWrap = document.querySelector("#mode-choices");
 const modeOptions = document.querySelector("#mode-options");
@@ -337,23 +343,37 @@ function projectBoard(prev, record) {
 
 // ----- Render: status, moves, captured, highlights -----
 
+const BOT_NAMES = {
+  1: "Andreea Botez",
+  2: "Anna Cramling",
+  3: "GothamChess",
+  4: "Magnus Carlsen",
+};
+
 function resolvePlayerNames(state) {
   const session = state && state.session ? state.session : {};
+  const humanName = currentUser && currentUser.username ? currentUser.username : "You";
+
   if (session.mode === "multiplayer") {
-    const selfName = currentUser && currentUser.username ? currentUser.username : "Tu";
     if (mpInfo) {
-      const oppName = mpInfo.opponent && mpInfo.opponent.username ? mpInfo.opponent.username : "Adversar";
-      const whiteName = mpInfo.color === "white" ? selfName : oppName;
-      const blackName = mpInfo.color === "black" ? selfName : oppName;
+      const oppName = mpInfo.opponent && mpInfo.opponent.username ? mpInfo.opponent.username : "Opponent";
+      const whiteName = mpInfo.color === "white" ? humanName : oppName;
+      const blackName = mpInfo.color === "black" ? humanName : oppName;
       return { whiteName, blackName };
     }
-    return { whiteName: selfName, blackName: "Adversar" };
+    return { whiteName: humanName, blackName: "Opponent" };
   }
 
-  const botColor = session.mode === "vs_bot" ? session.botColor : null;
-  const whiteName = botColor === "white" ? "BOT" : "PESSI";
-  const blackName = botColor === "black" ? "BOT" : "RONALDO";
-  return { whiteName, blackName };
+  if (session.mode === "vs_bot") {
+    const botLevel = Number(modeDraft.level) || 3;
+    const botName = BOT_NAMES[botLevel] || "Magnus Carlsen";
+    const whiteName = session.botColor === "white" ? botName : humanName;
+    const blackName = session.botColor === "black" ? botName : humanName;
+    return { whiteName, blackName };
+  }
+
+  // Local game — use logged-in username for white, generic for black
+  return { whiteName: humanName, blackName: "Player 2" };
 }
 
 function renderStatus(state) {
@@ -407,15 +427,21 @@ function renderMoves(state) {
   movesEmpty.style.display = history.length === 0 ? "block" : "none";
   movesList.innerHTML = "";
 
+  // Pair moves by number, handling games/puzzles that start with Black's move.
   const pairs = [];
-  for (let i = 0; i < history.length; i += 2) {
+  let i = 0;
+  if (history.length > 0 && history[0].color === "black") {
+    pairs.push({ number: history[0].number, white: null, black: history[0] });
+    i = 1;
+  }
+  for (; i < history.length; i += 2) {
     pairs.push({ number: history[i].number, white: history[i], black: history[i + 1] || null });
   }
 
-  for (let i = 0; i < pairs.length; i++) {
-    const { number, white, black } = pairs[i];
+  const latestMove = history[history.length - 1];
+
+  for (const { number, white, black } of pairs) {
     const li = document.createElement("li");
-    const isLatestRow = i === pairs.length - 1;
 
     const num = document.createElement("span");
     num.className = "ply-num";
@@ -423,17 +449,20 @@ function renderMoves(state) {
     li.appendChild(num);
 
     const w = document.createElement("span");
-    w.className = "ply" + (isLatestRow && !black ? " latest" : "");
-    w.textContent = white.san;
+    if (white) {
+      w.className = "ply" + (white === latestMove ? " latest" : "");
+      w.textContent = white.san;
+    } else {
+      w.className = "ply ply-gap";
+    }
     li.appendChild(w);
 
     const b = document.createElement("span");
     if (black) {
-      b.className = "ply" + (isLatestRow ? " latest" : "");
+      b.className = "ply" + (black === latestMove ? " latest" : "");
       b.textContent = black.san;
     } else {
-      b.className = "ply empty";
-      b.textContent = "...";
+      b.className = "ply";
     }
     li.appendChild(b);
 
@@ -457,6 +486,14 @@ function resetTransientGameUi({ clearHistory = false, hidePuzzleUi = true } = {}
   setMessage("");
   endgameModal.hidden = true;
   endgameSeen = false;
+  // Reset end-of-game CTA state for the next game.
+  _endHandled = false;
+  lastFinishedGameId = null;
+  lastFinishedLocal = null;
+  _lastRecordedKey = null;
+  if (endgameReview) { endgameReview.hidden = true; endgameReview.onclick = null; }
+  if (endgameAnalyze) { endgameAnalyze.hidden = true; endgameAnalyze.onclick = null; }
+  if (endActions) endActions.hidden = true;
   if (clearHistory) {
     clearMoveHistoryPanel();
   }
@@ -648,7 +685,7 @@ async function loadPuzzle(theme) {
       body: JSON.stringify(body),
     });
     const data = await response.json();
-    if (!data.ok) throw new Error(data.error || "Nu pot încărca puzzle-ul.");
+    if (!data.ok) throw new Error(data.error || "Cannot load puzzle.");
     cancelPendingBotMove();
     resetTransientGameUi({ clearHistory: true, hidePuzzleUi: false });
     puzzleSolvedModal.hidden = true;
@@ -665,7 +702,7 @@ async function loadPuzzle(theme) {
       rebuildCoords();
     }
     applyState(data.state);
-    showPuzzleFeedback("Ce idee ai?", "hint");
+    showPuzzleFeedback("Find the move.", "hint");
   } catch (err) {
     setMessage("Puzzle: " + err.message);
   }
@@ -685,10 +722,10 @@ function showPuzzleFeedback(message, kind = "hint") {
   clearTimeout(_puzzleFeedbackTimer);
   if (kind === "wrong") {
     // Revert to prompt after 3.5s
-    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Ce idee ai?", "hint"), 3500);
+    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Find the move.", "hint"), 3500);
   } else if (kind === "good") {
     // Revert to prompt after 1.5s
-    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Ce idee ai?", "hint"), 1500);
+    _puzzleFeedbackTimer = setTimeout(() => showPuzzleFeedback("Find the move.", "hint"), 1500);
   }
 }
 
@@ -749,6 +786,9 @@ function applyState(newState) {
   renderEndgame(newState);
   renderPuzzleInfo(newState);
 
+  // Persist + reveal Review/Analyze CTAs when a game ends (bot/local).
+  handleGameEnd(newState);
+
   // If we're in vs-bot mode and it's the bot's turn, kick the bot.
   scheduleBotMoveIfNeeded(newState);
 }
@@ -798,7 +838,7 @@ async function scheduleBotMoveIfNeeded(state) {
     const data = await response.json();
     if (requestSeq !== botRequestSeq) return;
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || "Botul a esuat.");
+      throw new Error(data.error || "Engine failed.");
     }
     setMessage("");
     applyState(data.state);
@@ -877,7 +917,7 @@ async function handleSquareClick(square) {
   }
 
   if (piece && piece.color !== state.turn) {
-    setMessage(`Este randul pieselor ${state.turnLabel.toLowerCase()}.`, "info");
+    setMessage(`${state.turn === "white" ? "White" : "Black"} to move.`, "info");
   } else {
     setMessage("");
   }
@@ -898,7 +938,7 @@ async function selectSquare(square) {
     } catch (err) {
       selectedSquare = null;
       legalMoves = [];
-      setMessage(err.message || "Nu pot incarca mutarile.");
+      setMessage(err.message || "Cannot load moves.");
     }
     return;
   }
@@ -909,7 +949,7 @@ async function selectSquare(square) {
   try {
     const response = await fetch(endpoint);
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Nu pot incarca mutarile.");
+    if (!response.ok || !data.ok) throw new Error(data.error || "Cannot load moves.");
     selectedSquare = square;
     legalMoves = data.moves;
     setMessage("");
@@ -985,17 +1025,17 @@ async function performUndo() {
   if (interactionLocked || botPending) return;
   if (!lastState || !lastState.canUndo) return;
   if (lastState && isMultiplayerMode(lastState)) {
-    setMessage("Undo nu este disponibil in multiplayer.", "info");
+    setMessage("Undo is not available in multiplayer.", "info");
     return;
   }
   interactionLocked = true;
   try {
     const response = await fetch("/api/undo", { method: "POST" });
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Undo a esuat.");
+    if (!response.ok || !data.ok) throw new Error(data.error || "Undo failed.");
     selectedSquare = null;
     legalMoves = [];
-    setMessage("Ultima mutare a fost anulata.", "info");
+    setMessage("Last move was undone.", "info");
     endgameModal.hidden = true;
     endgameSeen = false;
     applyState(data.state);
@@ -1009,30 +1049,14 @@ async function performUndo() {
 async function performReset() {
   if (interactionLocked) return;
   if (botPending) return;
-
+  // If we're mid-multiplayer, leave first so the queue is clean.
   if (lastState && isMultiplayerMode(lastState)) {
-    await leaveMultiplayer({ resign: true, resetSession: true });
-    await loadLocalState({ openMode: true });
-    return;
+    await leaveMultiplayer({ resign: true, resetSession: true, silent: true });
   }
-
-  // In puzzle mode, "New game" loads a new random puzzle in the same theme
-  if (lastState && isPuzzleMode(lastState)) {
-    const theme = lastState?.puzzle?.themes?.[0] || null;
-    await loadPuzzle(theme);
-    return;
-  }
-
-  interactionLocked = true;
-  try {
-    const response = await fetch("/api/reset", { method: "POST" });
-    const data = await response.json();
-    resetTransientGameUi({ clearHistory: true });
-    lastState = null;
-    applyState(data.state);
-  } finally {
-    setTimeout(() => { interactionLocked = false; }, 200);
-  }
+  endgameModal.hidden = true;
+  endgameSeen = false;
+  // "New Game" always opens the full mode picker so the user can switch modes.
+  openModeModal({ allowCancel: true, compact: false });
 }
 
 function performFlip() {
@@ -1075,20 +1099,34 @@ async function choosePromotion(kind) {
 
 // ----- Mode selection modal -----
 
-function openModeModal({ allowCancel = false } = {}) {
-  // Pre-fill draft from current session if available.
-  const session = lastState && lastState.session;
-  if (session) {
-    modeDraft.mode = session.mode === "puzzle" ? "puzzle" : (session.mode || "local");
-    if (session.botColor) {
-      // Human plays the opposite color of the bot.
-      modeDraft.color = session.botColor === "white" ? "black" : "white";
-    }
-    if (session.mode === "multiplayer") {
-      modeDraft.minutes =
-        (session.timeControl && session.timeControl.baseMin)
-        || (mpInfo && mpInfo.timeControl && mpInfo.timeControl.baseMin)
-        || modeDraft.minutes;
+// Compact mode: hides the tile picker so only the chosen mode's options show.
+let modeCompact = false;
+const modeTitleEl = document.querySelector("#mode-title");
+const modeHomeBtn = document.querySelector("#mode-home");
+const MODE_TITLES = {
+  vs_bot:      "Play Bot",
+  local:       "Local Game",
+  multiplayer: "Play Online",
+  puzzle:      "Puzzles",
+};
+
+function openModeModal({ allowCancel = false, compact = false } = {}) {
+  modeCompact = compact;
+  // Pre-fill draft from current session if available (only when NOT compact —
+  // compact mode keeps whatever URL/preset already put into modeDraft).
+  if (!compact) {
+    const session = lastState && lastState.session;
+    if (session) {
+      modeDraft.mode = session.mode === "puzzle" ? "puzzle" : (session.mode || "local");
+      if (session.botColor) {
+        modeDraft.color = session.botColor === "white" ? "black" : "white";
+      }
+      if (session.mode === "multiplayer") {
+        modeDraft.minutes =
+          (session.timeControl && session.timeControl.baseMin)
+          || (mpInfo && mpInfo.timeControl && mpInfo.timeControl.baseMin)
+          || modeDraft.minutes;
+      }
     }
   }
   modeCancel.hidden = !allowCancel;
@@ -1103,11 +1141,24 @@ function openModeModal({ allowCancel = false } = {}) {
 
 function closeModeModal() {
   modeModal.hidden = true;
+  modeCompact = false;
 }
 
 function syncModeUI() {
+  // In compact mode, hide the tile picker entirely.
+  if (modeChoicesWrap) {
+    modeChoicesWrap.hidden = !!modeCompact;
+  }
   for (const tile of modeChoicesWrap.querySelectorAll(".mode-tile")) {
     tile.classList.toggle("selected", tile.dataset.mode === modeDraft.mode);
+  }
+  if (modeTitleEl) {
+    modeTitleEl.textContent = modeCompact
+      ? (MODE_TITLES[modeDraft.mode] || "New game")
+      : "New game";
+  }
+  if (modeHomeBtn) {
+    modeHomeBtn.hidden = !modeCompact;
   }
   modeOptions.hidden = modeDraft.mode !== "vs_bot";
   if (multiplayerOptionsEl) {
@@ -1199,7 +1250,7 @@ async function startSelectedMode() {
       body: JSON.stringify(body),
     });
     const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Nu pot porni jocul.");
+    if (!response.ok || !data.ok) throw new Error(data.error || "Cannot start game.");
     applyState(data.state);
   } catch (err) {
     setMessage("Mod: " + err.message);
@@ -1238,7 +1289,7 @@ if (levelChoicesWrap) {
 }
 modeStart.addEventListener("click", startSelectedMode);
 modeCancel.addEventListener("click", closeModeModal);
-modeButton.addEventListener("click", () => openModeModal({ allowCancel: true }));
+modeButton.addEventListener("click", () => openModeModal({ allowCancel: true, compact: false }));
 
 // ----- Multiplayer (WebSocket) -----
 
@@ -1299,7 +1350,7 @@ async function ensureMultiplayerSocket() {
     showMultiplayerOverlay(false);
   });
   mpSocket.addEventListener("error", () => {
-    setMessage("Multiplayer: conexiune esuata.");
+    setMessage("Multiplayer: connection failed.");
   });
 
   return mpAuthPromise;
@@ -1360,18 +1411,18 @@ async function startMultiplayer(minutes) {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) {
-      throw new Error(data.error || "Nu pot porni multiplayer.");
+      throw new Error(data.error || "Cannot start multiplayer.");
     }
     if (data.state) {
       applyState(decorateMultiplayerState(data.state));
     }
   } catch (err) {
-    setMessage(err.message || "Nu pot porni multiplayer.");
+    setMessage(err.message || "Cannot start multiplayer.");
     return;
   }
 
   mpStatus = "queue";
-  showMultiplayerOverlay(true, "Conectare la server...");
+  showMultiplayerOverlay(true, "Connecting to server...");
 
   await ensureMultiplayerSocket();
   try {
@@ -1382,7 +1433,7 @@ async function startMultiplayer(minutes) {
   } catch (err) {
     await leaveMultiplayer({ silent: true, resetSession: true });
     await loadLocalState({ openMode: true });
-    setMessage("Multiplayer: autentificare esuata.");
+    setMessage("Multiplayer: authentication failed.");
     return;
   }
 
@@ -1417,7 +1468,7 @@ async function leaveMultiplayer({ resign = false, silent = false, resetSession =
     }
   }
   if (!silent) {
-    setMessage("Ai iesit din multiplayer.", "info");
+    setMessage("Left multiplayer.", "info");
   }
 }
 
@@ -1498,16 +1549,16 @@ function handleMultiplayerMessage(event) {
       }
       return;
     case "opponent_left":
-      setMessage("Adversarul s-a deconectat.", "info");
+      setMessage("Opponent disconnected.", "info");
       return;
     case "opponent_back":
       setMessage("");
       return;
     case "error":
-      setMessage(msg.message || "Eroare multiplayer.");
+      setMessage(msg.message || "Multiplayer error.");
       interactionLocked = false;
       if (mpPendingMoves) {
-        mpPendingMoves.reject(new Error(msg.message || "Eroare la mutari."));
+        mpPendingMoves.reject(new Error(msg.message || "Move error."));
         mpPendingMoves = null;
       }
       return;
@@ -1518,10 +1569,10 @@ function handleMultiplayerMessage(event) {
 
 async function requestMultiplayerMoves(square) {
   if (!mpSocket || mpSocket.readyState !== WebSocket.OPEN) {
-    throw new Error("Conexiune multiplayer indisponibila.");
+    throw new Error("Multiplayer connection unavailable.");
   }
   if (mpPendingMoves) {
-    throw new Error("Asteapta raspunsul anterior.");
+    throw new Error("Waiting for previous response.");
   }
   return new Promise((resolve, reject) => {
     mpPendingMoves = { square, resolve, reject };
@@ -1529,7 +1580,7 @@ async function requestMultiplayerMoves(square) {
     setTimeout(() => {
       if (mpPendingMoves && mpPendingMoves.square === square) {
         mpPendingMoves = null;
-        reject(new Error("Timeout la mutari."));
+        reject(new Error("Move request timed out."));
       }
     }, 3000);
   });
@@ -1537,7 +1588,7 @@ async function requestMultiplayerMoves(square) {
 
 async function sendMultiplayerMove(origin, target, promotion) {
   if (!mpSocket || mpSocket.readyState !== WebSocket.OPEN) {
-    throw new Error("Conexiune multiplayer indisponibila.");
+    throw new Error("Multiplayer connection unavailable.");
   }
   mpSocket.send(JSON.stringify({
     type: "move",
@@ -1598,11 +1649,9 @@ function hideAuthModal() {
 function updateUserChip() {
   if (!currentUser) {
     userChipEl.hidden = true;
-    logoutBtn.hidden = true;
     return;
   }
   userChipEl.hidden = false;
-  logoutBtn.hidden = false;
   userNameEl.textContent = currentUser.username;
   userRatingEl.textContent = currentUser.rating ? `★ ${currentUser.rating}` : '';
 }
@@ -1612,7 +1661,7 @@ async function performLogin(e) {
   const username = loginUserEl.value.trim();
   const password = loginPassEl.value;
   if (!username || !password) {
-    authErrorEl.textContent = 'Completeaza toate câmpurile.';
+    authErrorEl.textContent = 'Fill in all fields.';
     return;
   }
   loginSubmitEl.disabled = true;
@@ -1624,7 +1673,7 @@ async function performLogin(e) {
       body: JSON.stringify({ username, password }),
     });
     const data = await res.json();
-    if (!data.ok) throw new Error(data.error || 'Autentificare eșuată.');
+    if (!data.ok) throw new Error(data.error || 'Login failed.');
     authToken = data.token;
     localStorage.setItem(TOKEN_KEY, authToken);
     currentUser = { username: data.username };
@@ -1641,7 +1690,7 @@ async function performRegister(e) {
   const username = regUserEl.value.trim();
   const password = regPassEl.value;
   if (!username || !password) {
-    authErrorEl.textContent = 'Completeaza toate câmpurile.';
+    authErrorEl.textContent = 'Fill in all fields.';
     return;
   }
   regSubmitEl.disabled = true;
@@ -1733,7 +1782,7 @@ authTabLogin.addEventListener('click', () => switchAuthTab('login'));
 authTabReg.addEventListener('click', () => switchAuthTab('register'));
 authLoginForm.addEventListener('submit', performLogin);
 authRegForm.addEventListener('submit', performRegister);
-logoutBtn.addEventListener('click', performLogout);
+if (logoutBtn) logoutBtn.addEventListener('click', performLogout);
 
 // ----- Initial load -----
 
@@ -1901,7 +1950,6 @@ function refreshTopbarAuthButtons() {
   const isAuthed = !!currentUser;
   if (loginShortcutBtn) loginShortcutBtn.hidden = isAuthed;
   if (profileLinkEl)    profileLinkEl.hidden    = !isAuthed;
-  if (logoutBtn)        logoutBtn.hidden        = !isAuthed;
 }
 const _origUpdateUserChip = updateUserChip;
 updateUserChip = function patchedUpdateUserChip() {
@@ -2014,54 +2062,63 @@ renderModeButton = function patchedRenderModeButton(state) {
 };
 
 // ============================================================
-// Persist finished bot games to /games/history (auth required).
+// Persist finished games + drive the end-of-game Review/Analyze CTAs.
 // ============================================================
 let _lastRecordedKey = null;
-async function maybeRecordBotGame(state) {
-  if (!currentUser || !authToken) return;
-  if (!state || state.status === 'active') return;
-  const sess = state.session || {};
-  if (sess.mode !== 'vs_bot') return;
+let lastFinishedGameId = null;   // DB id of the just-saved bot game (for Review/Analyze)
+let lastFinishedLocal = null;    // { moves, meta } for client-side local review
+let _endHandled = false;         // guard so we record/show CTAs once per game end
 
-  const hist = state.history || [];
-  const moves = hist.map((h) => {
+const _STATUS_CANON = {
+  checkmate:         (w) => (w ? `${w}_win` : 'draw'),
+  stalemate:         () => 'draw',
+  draw_insufficient: () => 'draw',
+  draw_fifty_move:   () => 'draw',
+  draw_repetition:   () => 'draw',
+  resign:            (w) => (w ? `${w}_win` : 'aborted'),
+  timeout:           (w) => (w ? `${w}_win` : 'aborted'),
+  abandoned:         (w) => (w ? `${w}_win` : 'aborted'),
+};
+const _REASON_CANON = {
+  checkmate: 'checkmate',
+  stalemate: 'stalemate',
+  draw_insufficient: 'draw_insufficient',
+  draw_fifty_move: 'draw_50_move',
+  draw_repetition: 'draw_threefold',
+  resign: 'resignation',
+  timeout: 'timeout',
+  abandoned: 'engine_error',
+};
+
+function movesFromHistory(hist) {
+  return (hist || []).map((h) => {
     let uci = (h.from || '') + (h.to || '');
     if (h.promotionKind) {
-      uci += h.promotionKind[0]; // "queen" -> "q"
+      uci += h.promotionKind[0];        // "queen" -> "q"
     } else if (h.promotion) {
       uci += String(h.promotion)[0];
     }
     return uci;
   }).filter((m) => m && m.length >= 4);
+}
+
+// Record a finished bot game; returns the new game id (or null).
+async function maybeRecordBotGame(state, moves) {
+  if (!currentUser || !authToken) return null;
+  if (!state || state.status === 'active') return null;
+  const sess = state.session || {};
+  if (sess.mode !== 'vs_bot') return null;
 
   const key = `${state.status}|${state.winner || ''}|${moves.length}|${moves.join('')}`;
-  if (key === _lastRecordedKey) return;
+  if (key === _lastRecordedKey && lastFinishedGameId) return lastFinishedGameId;
   _lastRecordedKey = key;
 
   const userColor = sess.botColor === 'white' ? 'black' : 'white';
-  const statusMap = {
-    checkmate: state.winner ? `${state.winner}_win` : 'draw',
-    stalemate: 'draw',
-    draw_insufficient: 'draw',
-    draw_fifty_move: 'draw',
-    draw_repetition: 'draw',
-    resign: state.winner ? `${state.winner}_win` : 'aborted',
-    timeout: state.winner ? `${state.winner}_win` : 'aborted',
-    abandoned: state.winner ? `${state.winner}_win` : 'aborted',
-  };
-  const reasonMap = {
-    checkmate: 'checkmate',
-    stalemate: 'stalemate',
-    draw_insufficient: 'draw_insufficient',
-    draw_fifty_move: 'draw_50_move',
-    draw_repetition: 'draw_threefold',
-    resign: 'resignation',
-    timeout: 'timeout',
-    abandoned: 'engine_error',
-  };
+  const status = (_STATUS_CANON[state.status] || (() => 'aborted'))(state.winner);
+  const reason = _REASON_CANON[state.status] || null;
 
   try {
-    await fetch('/games/record', {
+    const res = await fetch('/games/record', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -2070,13 +2127,105 @@ async function maybeRecordBotGame(state) {
       body: JSON.stringify({
         color: userColor,
         bot_level: modeDraft.level || 3,
-        status: statusMap[state.status] || 'aborted',
-        result_reason: reasonMap[state.status] || null,
+        status,
+        result_reason: reason,
         moves,
         fen: state.fen || null,
       }),
     });
+    const data = await res.json();
+    if (data && data.ok && data.game_id) {
+      lastFinishedGameId = data.game_id;
+      return data.game_id;
+    }
   } catch (_) { /* non-fatal */ }
+  return null;
+}
+
+// Called after every state render. Detects game end and wires the CTAs.
+async function handleGameEnd(state) {
+  if (!state || state.status === 'active') { _endHandled = false; return; }
+  if (_endHandled) return;
+  _endHandled = true;
+
+  const sess = state.session || {};
+  const moves = movesFromHistory(state.history || []);
+
+  if (sess.mode === 'vs_bot') {
+    const id = await maybeRecordBotGame(state, moves);
+    if (id) {
+      showEndgameCtas({ gameId: id, canAnalyze: true });
+    } else {
+      // Guest (or save failed): offer client-side review without persistence.
+      const botName = (typeof BOT_NAMES !== 'undefined' && BOT_NAMES[modeDraft.level || 3]) || 'Bot';
+      const botIsWhite = sess.botColor === 'white';
+      lastFinishedLocal = {
+        moves,
+        meta: {
+          white_name: botIsWhite ? botName : 'You',
+          black_name: botIsWhite ? 'You' : botName,
+          user_color: botIsWhite ? 'black' : 'white',
+          status: (_STATUS_CANON[state.status] || (() => 'aborted'))(state.winner),
+          result_reason: _REASON_CANON[state.status] || null,
+        },
+      };
+      showEndgameCtas({ local: true, canAnalyze: false });
+    }
+  } else if (sess.mode === 'local') {
+    // Local games aren't persisted — stash moves so the review page can
+    // replay them client-side via /games/replay.
+    lastFinishedLocal = {
+      moves,
+      meta: {
+        white_name: 'White',
+        black_name: 'Black',
+        user_color: 'white',
+        status: (_STATUS_CANON[state.status] || (() => 'aborted'))(state.winner),
+        result_reason: _REASON_CANON[state.status] || null,
+      },
+    };
+    showEndgameCtas({ local: true, canAnalyze: false });
+  }
+  // Multiplayer games are saved server-side and reviewable from the profile.
+}
+
+// Reveal the Review / Analyze buttons in BOTH the end-game modal and the
+// side panel, wired to the right destination (saved bot game vs local replay).
+function showEndgameCtas({ gameId = null, local = false, canAnalyze = false } = {}) {
+  const reviewAction = gameId
+    ? () => { location.href = `/games/${gameId}/review`; }
+    : () => openLocalReview();
+  const analyzeAction = gameId
+    ? () => { location.href = `/games/${gameId}/review?analyze=1`; }
+    : null;
+
+  // Modal buttons
+  if (endgameReview) {
+    endgameReview.hidden = false;
+    endgameReview.onclick = reviewAction;
+  }
+  if (endgameAnalyze) {
+    endgameAnalyze.hidden = !(canAnalyze && analyzeAction);
+    endgameAnalyze.onclick = analyzeAction;
+  }
+
+  // Side-panel buttons (persist after the modal is dismissed)
+  if (endActions) endActions.hidden = false;
+  if (sideReview) sideReview.onclick = reviewAction;
+  if (sideAnalyze) {
+    sideAnalyze.hidden = !(canAnalyze && analyzeAction);
+    sideAnalyze.onclick = analyzeAction;
+  }
+  if (sideNewGame) sideNewGame.onclick = () => performReset();
+}
+
+// Stash the local game and open the review page (no DB id needed).
+function openLocalReview() {
+  if (!lastFinishedLocal) return;
+  try {
+    sessionStorage.setItem('chessmate_local_review', JSON.stringify(lastFinishedLocal));
+  } catch (_) { /* ignore quota errors */ }
+  location.href = '/review';
 }
 
 async function boot() {
@@ -2096,15 +2245,21 @@ async function boot() {
     return;
   }
 
-  // 3) Load state, then open the setup modal pre-filled. We never auto-start;
-  //    the user clicks Start to begin so all entry points feel the same.
   await loadLocalState({ openMode: false });
+
   if (mode) {
-    openModeModal({ allowCancel: false });
+    // Came from a home-page card — open the per-mode setup popup so the user
+    // can pick color/level/time/theme before the game actually starts.
     presetSetupDraftFromUrl();
-    syncModeUI();
+    // Local games have no setup options worth asking about — start directly.
+    if (mode === "local") {
+      await startSelectedMode();
+    } else {
+      openModeModal({ allowCancel: false, compact: true });
+    }
   } else {
-    openModeModal({ allowCancel: true });
+    // No URL mode (user landed directly on /play) — show the full picker.
+    openModeModal({ allowCancel: true, compact: false });
   }
 }
 
